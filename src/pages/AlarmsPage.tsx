@@ -1,0 +1,229 @@
+import { useState } from 'react';
+import { mockAlarms } from '../data/mockData';
+import { Alarm, AlarmLevel, AlarmStatus } from '../types';
+import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
+import { cn } from '../utils/cn';
+
+export default function AlarmsPage() {
+  const [alarms, setAlarms] = useState(mockAlarms);
+  const [filters, setFilters] = useState({
+    mixer: 'all',
+    level: 'all',
+    status: 'all',
+  });
+
+  const handleAcknowledge = (alarmId: string) => {
+    setAlarms(alarms.map(a =>
+      a.id === alarmId
+        ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
+        : a
+    ));
+  };
+
+  const handleAcknowledgeAll = () => {
+    if (confirm('Acquitter toutes les alarmes actives ?')) {
+      setAlarms(alarms.map(a =>
+        a.status === 'Active'
+          ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
+          : a
+      ));
+    }
+  };
+
+  const filteredAlarms = alarms.filter(alarm => {
+    if (filters.mixer !== 'all' && alarm.mixerId !== parseInt(filters.mixer)) return false;
+    if (filters.level !== 'all' && alarm.level !== filters.level) return false;
+    if (filters.status !== 'all' && alarm.status !== filters.status) return false;
+    return true;
+  });
+
+  const getLevelIcon = (level: AlarmLevel) => {
+    switch (level) {
+      case 'Critique':
+        return <AlertTriangle className="w-5 h-5 text-red-600" />;
+      case 'Warning':
+        return <AlertTriangle className="w-5 h-5 text-orange-600" />;
+      default:
+        return <Info className="w-5 h-5 text-blue-600" />;
+    }
+  };
+
+  const getLevelColor = (level: AlarmLevel) => {
+    switch (level) {
+      case 'Critique':
+        return 'bg-red-100 text-red-800 border-red-300';
+      case 'Warning':
+        return 'bg-orange-100 text-orange-800 border-orange-300';
+      default:
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+    }
+  };
+
+  const activeAlarms = alarms.filter(a => a.status === 'Active');
+  const criticalAlarms = alarms.filter(a => a.level === 'Critique' && a.status === 'Active');
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-gray-900">Alarmes</h1>
+        {activeAlarms.length > 0 && (
+          <button onClick={handleAcknowledgeAll} className="btn-primary">
+            <CheckCircle2 className="w-4 h-4 inline mr-2" />
+            Acquitter toutes les alarmes
+          </button>
+        )}
+      </div>
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="card">
+          <div className="text-sm text-gray-600">Alarmes actives</div>
+          <div className="text-2xl font-bold text-red-600">{activeAlarms.length}</div>
+        </div>
+        <div className="card">
+          <div className="text-sm text-gray-600">Alarmes critiques</div>
+          <div className="text-2xl font-bold text-red-600">{criticalAlarms.length}</div>
+        </div>
+        <div className="card">
+          <div className="text-sm text-gray-600">Total alarmes</div>
+          <div className="text-2xl font-bold">{alarms.length}</div>
+        </div>
+      </div>
+
+      {/* Filtres */}
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4">Filtres</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Malaxeur
+            </label>
+            <select
+              value={filters.mixer}
+              onChange={(e) => setFilters({ ...filters, mixer: e.target.value })}
+              className="w-full border rounded-md px-3 py-2"
+            >
+              <option value="all">Tous</option>
+              {[1, 2, 3, 4, 5, 6, 7].map(id => (
+                <option key={id} value={id.toString()}>Malaxeur B{id}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Niveau
+            </label>
+            <select
+              value={filters.level}
+              onChange={(e) => setFilters({ ...filters, level: e.target.value })}
+              className="w-full border rounded-md px-3 py-2"
+            >
+              <option value="all">Tous</option>
+              <option value="Critique">Critique</option>
+              <option value="Warning">Warning</option>
+              <option value="Info">Info</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Statut
+            </label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full border rounded-md px-3 py-2"
+            >
+              <option value="all">Tous</option>
+              <option value="Active">Active</option>
+              <option value="Acquittée">Acquittée</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Liste des alarmes */}
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-4">Liste des alarmes</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                <th className="text-left p-2">Niveau</th>
+                <th className="text-left p-2">Date/Heure</th>
+                <th className="text-left p-2">Malaxeur</th>
+                <th className="text-left p-2">Code</th>
+                <th className="text-left p-2">Description</th>
+                <th className="text-left p-2">Statut</th>
+                <th className="text-left p-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAlarms.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-4 text-center text-gray-500">
+                    Aucune alarme trouvée
+                  </td>
+                </tr>
+              ) : (
+                filteredAlarms.map((alarm) => (
+                  <tr
+                    key={alarm.id}
+                    className={cn(
+                      'border-b hover:bg-gray-50',
+                      alarm.status === 'Active' && alarm.level === 'Critique' && 'bg-red-50'
+                    )}
+                  >
+                    <td className="p-2">
+                      <div className="flex items-center gap-2">
+                        {getLevelIcon(alarm.level)}
+                        <span className={cn('px-2 py-1 rounded text-xs font-medium border', getLevelColor(alarm.level))}>
+                          {alarm.level}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-2">
+                      {new Date(alarm.occurredAt).toLocaleString('fr-FR')}
+                    </td>
+                    <td className="p-2 font-medium">Malaxeur B{alarm.mixerId}</td>
+                    <td className="p-2 font-mono text-sm">{alarm.alarmCode}</td>
+                    <td className="p-2">{alarm.description}</td>
+                    <td className="p-2">
+                      <span className={cn(
+                        'px-2 py-1 rounded text-xs font-medium',
+                        alarm.status === 'Active' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                      )}>
+                        {alarm.status}
+                      </span>
+                    </td>
+                    <td className="p-2">
+                      {alarm.status === 'Active' ? (
+                        <button
+                          onClick={() => handleAcknowledge(alarm.id)}
+                          className="text-primary-600 hover:text-primary-700 text-sm"
+                        >
+                          <CheckCircle2 className="w-4 h-4 inline mr-1" />
+                          Acquitter
+                        </button>
+                      ) : (
+                        <div className="text-sm text-gray-500">
+                          Acquittée par {alarm.acknowledgedBy}
+                          <br />
+                          {alarm.acknowledgedAt && (
+                            <span className="text-xs">
+                              {new Date(alarm.acknowledgedAt).toLocaleString('fr-FR')}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
