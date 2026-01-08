@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { batchesAPI } from '../services/api';
 import BatchHistoryDialog from '../components/BatchHistoryDialog';
-import { BatchStatus } from '../types';
+import { Batch, BatchStatus } from '../types';
 import { Download } from 'lucide-react';
 
 export default function HistoryPage() {
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [batchHistory, setBatchHistory] = useState<Batch[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     mixer: 'all',
     recipe: 'all',
@@ -13,59 +16,34 @@ export default function HistoryPage() {
     dateTo: '',
   });
 
-  // Données simulées
-  const batchHistory = [
-    {
-      id: '1',
-      batchNumber: 'BATCH-2024-001',
-      mixerId: 1,
-      recipeName: 'Recette A - Standard',
-      startedAt: new Date(Date.now() - 86400000).toISOString(),
-      completedAt: new Date(Date.now() - 82800000).toISOString(),
-      status: 'Succès' as BatchStatus,
-      operatorId: 'op1',
-    },
-    {
-      id: '2',
-      batchNumber: 'BATCH-2024-002',
-      mixerId: 2,
-      recipeName: 'Recette B - Rapide',
-      startedAt: new Date(Date.now() - 172800000).toISOString(),
-      completedAt: new Date(Date.now() - 169200000).toISOString(),
-      status: 'Alerte' as BatchStatus,
-      operatorId: 'op2',
-    },
-    {
-      id: '3',
-      batchNumber: 'BATCH-2024-003',
-      mixerId: 3,
-      recipeName: 'Recette C - Précision',
-      startedAt: new Date(Date.now() - 259200000).toISOString(),
-      completedAt: new Date(Date.now() - 255600000).toISOString(),
-      status: 'Succès' as BatchStatus,
-      operatorId: 'op1',
-    },
-    {
-      id: '4',
-      batchNumber: 'BATCH-2024-004',
-      mixerId: 1,
-      recipeName: 'Recette A - Standard',
-      startedAt: new Date(Date.now() - 345600000).toISOString(),
-      completedAt: new Date(Date.now() - 342000000).toISOString(),
-      status: 'Erreur' as BatchStatus,
-      operatorId: 'op3',
-    },
-    {
-      id: '5',
-      batchNumber: 'BATCH-2024-005',
-      mixerId: 4,
-      recipeName: 'Recette B - Rapide',
-      startedAt: new Date(Date.now() - 432000000).toISOString(),
-      completedAt: new Date(Date.now() - 428400000).toISOString(),
-      status: 'Succès' as BatchStatus,
-      operatorId: 'op2',
-    },
-  ];
+  useEffect(() => {
+    const fetchBatches = async () => {
+      try {
+        setLoading(true);
+        const data = await batchesAPI.getAll();
+        // Transformer les données de l'API pour correspondre au type Batch
+        const transformedBatches: Batch[] = data.map((b: any) => ({
+          id: b.id,
+          batchNumber: b.batchNumber || b.batch_number,
+          mixerId: b.mixerId || b.mixer_id,
+          recipeId: b.recipeId || b.recipe_id,
+          recipeName: b.recipeName || b.recipe_name || 'Recette inconnue',
+          startedAt: b.startedAt || b.started_at,
+          completedAt: b.completedAt || b.completed_at,
+          status: (b.status || 'Terminé') as BatchStatus,
+          operatorId: b.operatorId || b.operator_id,
+          steps: b.steps || [],
+          metrics: b.metrics || [],
+        }));
+        setBatchHistory(transformedBatches);
+      } catch (error) {
+        console.error('Error fetching batches:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBatches();
+  }, []);
 
   const filteredBatches = batchHistory.filter(batch => {
     if (filters.mixer !== 'all' && batch.mixerId !== parseInt(filters.mixer)) return false;
@@ -114,6 +92,10 @@ export default function HistoryPage() {
   };
 
   const uniqueRecipes = Array.from(new Set(batchHistory.map(b => b.recipeName)));
+
+  if (loading) {
+    return <div className="text-center py-8">Chargement...</div>;
+  }
 
   return (
     <div className="space-y-6">

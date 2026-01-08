@@ -1,32 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { mockMixers, mockRecipes } from '../data/mockData';
+import { useMixer } from '../hooks/useMixers';
+import { batchesAPI } from '../services/api';
 import MixerVisual from '../components/MixerVisual';
 import RecipeProgress from '../components/RecipeProgress';
 import BatchHistoryDialog from '../components/BatchHistoryDialog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Batch } from '../types';
 
 export default function MixerDetail() {
   const { id } = useParams<{ id: string }>();
   const mixerId = parseInt(id || '1');
-  const mixer = mockMixers.find(m => m.id === mixerId) || mockMixers[0];
+  const { mixer, loading } = useMixer(mixerId);
   const [activeTab, setActiveTab] = useState<'overview' | 'recipe' | 'history'>('overview');
   const [selectedBatch, setSelectedBatch] = useState<string | null>(null);
+  const [batchHistory, setBatchHistory] = useState<Batch[]>([]);
 
-  // Données simulées pour les graphiques
+  useEffect(() => {
+    const fetchBatches = async () => {
+      try {
+        const batches = await batchesAPI.getAll();
+        setBatchHistory(batches.filter((b: Batch) => b.mixerId === mixerId).slice(0, 10));
+      } catch (error) {
+        console.error('Error fetching batches:', error);
+      }
+    };
+    fetchBatches();
+  }, [mixerId]);
+
+  if (loading || !mixer) {
+    return <div className="text-center py-8">Chargement...</div>;
+  }
+
+  // Données simulées pour les graphiques (en attendant les métriques réelles)
   const metricsData = Array.from({ length: 20 }, (_, i) => ({
     time: `${i * 5}min`,
-    temperature: 70 + Math.sin(i * 0.5) * 10 + Math.random() * 5,
-    speed: 40 + Math.sin(i * 0.3) * 8 + Math.random() * 3,
-    power: 10 + Math.sin(i * 0.4) * 4 + Math.random() * 2,
+    temperature: (mixer.temperature || 70) + Math.sin(i * 0.5) * 10 + Math.random() * 5,
+    speed: (mixer.speed || 40) + Math.sin(i * 0.3) * 8 + Math.random() * 3,
+    power: (mixer.power || 10) + Math.sin(i * 0.4) * 4 + Math.random() * 2,
   }));
-
-  // Historique simulé
-  const batchHistory = [
-    { id: '1', batchNumber: 'BATCH-2024-001', recipeName: mixer.recipe?.name || 'Recette A', startedAt: new Date(Date.now() - 86400000).toISOString(), status: 'Succès' as const },
-    { id: '2', batchNumber: 'BATCH-2024-002', recipeName: mixer.recipe?.name || 'Recette A', startedAt: new Date(Date.now() - 172800000).toISOString(), status: 'Alerte' as const },
-    { id: '3', batchNumber: 'BATCH-2024-003', recipeName: mixer.recipe?.name || 'Recette A', startedAt: new Date(Date.now() - 259200000).toISOString(), status: 'Succès' as const },
-  ];
 
   return (
     <div className="space-y-6">

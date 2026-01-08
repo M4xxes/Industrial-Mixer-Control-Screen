@@ -1,14 +1,41 @@
-import { useState } from 'react';
-import { mockInventory } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import { inventoryAPI } from '../services/api';
 import { Inventory } from '../types';
 import { Plus, AlertTriangle } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export default function InventoryPage() {
-  const [inventory, setInventory] = useState(mockInventory);
+  const [inventory, setInventory] = useState<Inventory[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Inventory | null>(null);
   const [replenishAmount, setReplenishAmount] = useState('');
+
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        setLoading(true);
+        const data = await inventoryAPI.getAll();
+        // Transformer les données de l'API pour correspondre au type Inventory
+        const transformedInventory: Inventory[] = data.map((item: any) => ({
+          id: item.id,
+          productName: item.productName || item.product_name,
+          currentQuantity: item.currentQuantity || item.current_quantity,
+          maxCapacity: item.maxCapacity || item.max_capacity,
+          minThreshold: item.minThreshold || item.min_threshold,
+          unit: item.unit as 'Kg' | 'L',
+          category: item.category,
+          status: item.status as 'Normal' | 'Bas' | 'Critique',
+        }));
+        setInventory(transformedInventory);
+      } catch (error) {
+        console.error('Error fetching inventory:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInventory();
+  }, []);
 
   const criticalCount = inventory.filter(i => i.status === 'Critique').length;
   const lowCount = inventory.filter(i => i.status === 'Bas').length;
@@ -27,7 +54,7 @@ export default function InventoryPage() {
     setReplenishAmount('');
   };
 
-  const handleReplenish = () => {
+  const handleReplenish = async () => {
     if (!selectedProduct || !replenishAmount) return;
 
     const amount = parseFloat(replenishAmount);
@@ -37,22 +64,35 @@ export default function InventoryPage() {
     }
 
     const newQuantity = Math.min(selectedProduct.currentQuantity + amount, selectedProduct.maxCapacity);
-    
-    setInventory(inventory.map(item => {
-      if (item.id === selectedProduct.id) {
-        const updated = {
-          ...item,
-          currentQuantity: newQuantity,
-          status: newQuantity <= item.minThreshold ? 'Critique' as const :
-                  newQuantity <= item.maxCapacity * 0.25 ? 'Bas' as const : 'Normal' as const,
-        };
-        return updated;
-      }
-      return item;
-    }));
+    const newStatus = newQuantity <= selectedProduct.minThreshold ? 'Critique' :
+                      newQuantity <= selectedProduct.maxCapacity * 0.25 ? 'Bas' : 'Normal';
 
-    alert(`Stock de ${selectedProduct.productName} réapprovisionné de ${amount} ${selectedProduct.unit}`);
-    closeDialog();
+    try {
+      await inventoryAPI.update(selectedProduct.id, {
+        current_quantity: newQuantity,
+        status: newStatus,
+      });
+      
+      // Recharger l'inventaire
+      const data = await inventoryAPI.getAll();
+      const transformedInventory: Inventory[] = data.map((item: any) => ({
+        id: item.id,
+        productName: item.productName || item.product_name,
+        currentQuantity: item.currentQuantity || item.current_quantity,
+        maxCapacity: item.maxCapacity || item.max_capacity,
+        minThreshold: item.minThreshold || item.min_threshold,
+        unit: item.unit as 'Kg' | 'L',
+        category: item.category,
+        status: item.status as 'Normal' | 'Bas' | 'Critique',
+      }));
+      setInventory(transformedInventory);
+
+      alert(`Stock de ${selectedProduct.productName} réapprovisionné de ${amount} ${selectedProduct.unit}`);
+      closeDialog();
+    } catch (error) {
+      console.error('Error updating inventory:', error);
+      alert('Erreur lors du réapprovisionnement');
+    }
   };
 
   const getStatusColor = (status: Inventory['status']) => {
@@ -72,6 +112,10 @@ export default function InventoryPage() {
     }
     return null;
   };
+
+  if (loading) {
+    return <div className="text-center py-8">Chargement...</div>;
+  }
 
   return (
     <div className="space-y-6">

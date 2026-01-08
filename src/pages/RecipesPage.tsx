@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { mockRecipes } from '../data/mockData';
-import { Recipe, RecipeStep, RecipeFunction } from '../types';
+import { useState, useEffect } from 'react';
+import { recipesAPI } from '../services/api';
+import { Recipe, RecipeStep, RecipeFunction, StepStatus } from '../types';
 import { Plus, Edit, Trash2, X } from 'lucide-react';
 
 export default function RecipesPage() {
-  const [recipes, setRecipes] = useState(mockRecipes);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [formData, setFormData] = useState<Partial<Recipe>>({
@@ -22,6 +23,43 @@ export default function RecipesPage() {
     'Mise au vide',
     'Extrusion',
   ];
+
+  useEffect(() => {
+    const fetchRecipes = async () => {
+      try {
+        setLoading(true);
+        const data = await recipesAPI.getAll();
+        // Transformer les données de l'API pour correspondre au type Recipe
+        const transformedRecipes: Recipe[] = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description || '',
+          steps: (r.steps || []).map((s: any) => ({
+            id: s.id,
+            stepNumber: s.stepNumber,
+            function: s.function as RecipeFunction,
+            arm: s.arm as 'GV' | 'PV',
+            screw: s.screw as 'GV' | 'PV',
+            duration: s.duration,
+            product: s.product || undefined,
+            weight: s.weight || undefined,
+            vacuum: s.vacuum || undefined,
+            critere: s.critere || undefined,
+            status: (s.status || 'Reversible') as StepStatus,
+          })),
+          createdAt: r.createdAt || r.created_at,
+          updatedAt: r.updatedAt || r.updated_at,
+          isActive: r.isActive !== undefined ? r.isActive : (r.is_active === 1 || r.is_active === true),
+        }));
+        setRecipes(transformedRecipes);
+      } catch (error) {
+        console.error('Error fetching recipes:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecipes();
+  }, []);
 
   const openDialog = (recipe?: Recipe) => {
     if (recipe) {
@@ -48,44 +86,115 @@ export default function RecipesPage() {
     setFormData({ name: '', description: '', steps: [] });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name || !formData.steps || formData.steps.length === 0) {
       alert('Veuillez remplir tous les champs obligatoires');
       return;
     }
 
-    if (editingRecipe) {
-      // Modifier recette existante
-      setRecipes(recipes.map(r => 
-        r.id === editingRecipe.id
-          ? {
-              ...r,
-              name: formData.name!,
-              description: formData.description,
-              steps: formData.steps!,
-              updatedAt: new Date().toISOString(),
-            }
-          : r
-      ));
-    } else {
-      // Créer nouvelle recette
-      const newRecipe: Recipe = {
-        id: Date.now().toString(),
+    try {
+      const recipeData = {
         name: formData.name!,
-        description: formData.description,
-        steps: formData.steps!,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isActive: true,
+        description: formData.description || '',
+        steps: formData.steps!.map(step => ({
+          stepNumber: step.stepNumber,
+          function: step.function,
+          arm: step.arm,
+          screw: step.screw,
+          duration: step.duration,
+          product: step.product || null,
+          weight: step.weight || null,
+          vacuum: step.vacuum || null,
+          critere: step.critere || null,
+          status: step.status || 'Reversible',
+        })),
       };
-      setRecipes([...recipes, newRecipe]);
+
+      if (editingRecipe) {
+        // Modifier recette existante
+        await recipesAPI.update(editingRecipe.id, recipeData);
+        // Recharger les recettes
+        const data = await recipesAPI.getAll();
+        const transformedRecipes: Recipe[] = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description || '',
+          steps: (r.steps || []).map((s: any) => ({
+            id: s.id,
+            stepNumber: s.stepNumber,
+            function: s.function as RecipeFunction,
+            arm: s.arm as 'GV' | 'PV',
+            screw: s.screw as 'GV' | 'PV',
+            duration: s.duration,
+            product: s.product || undefined,
+            weight: s.weight || undefined,
+          })),
+          createdAt: r.createdAt || r.created_at,
+          updatedAt: r.updatedAt || r.updated_at,
+          isActive: r.isActive !== undefined ? r.isActive : (r.is_active === 1 || r.is_active === true),
+        }));
+        setRecipes(transformedRecipes);
+      } else {
+        // Créer nouvelle recette
+        await recipesAPI.create(recipeData);
+        // Recharger les recettes
+        const data = await recipesAPI.getAll();
+        const transformedRecipes: Recipe[] = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description || '',
+          steps: (r.steps || []).map((s: any) => ({
+            id: s.id,
+            stepNumber: s.stepNumber,
+            function: s.function as RecipeFunction,
+            arm: s.arm as 'GV' | 'PV',
+            screw: s.screw as 'GV' | 'PV',
+            duration: s.duration,
+            product: s.product || undefined,
+            weight: s.weight || undefined,
+          })),
+          createdAt: r.createdAt || r.created_at,
+          updatedAt: r.updatedAt || r.updated_at,
+          isActive: r.isActive !== undefined ? r.isActive : (r.is_active === 1 || r.is_active === true),
+        }));
+        setRecipes(transformedRecipes);
+      }
+      closeDialog();
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      alert('Erreur lors de la sauvegarde de la recette');
     }
-    closeDialog();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Êtes-vous sûr de vouloir supprimer cette recette ?')) {
-      setRecipes(recipes.filter(r => r.id !== id));
+      try {
+        await recipesAPI.delete(id);
+        // Recharger les recettes
+        const data = await recipesAPI.getAll();
+        const transformedRecipes: Recipe[] = data.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description || '',
+          steps: (r.steps || []).map((s: any) => ({
+            id: s.id,
+            stepNumber: s.stepNumber,
+            function: s.function as RecipeFunction,
+            arm: s.arm as 'GV' | 'PV',
+            screw: s.screw as 'GV' | 'PV',
+            duration: s.duration,
+            product: s.product || undefined,
+            weight: s.weight || undefined,
+          })),
+          createdAt: r.createdAt || r.created_at,
+          updatedAt: r.updatedAt || r.updated_at,
+          isActive: r.isActive !== undefined ? r.isActive : (r.is_active === 1 || r.is_active === true),
+        }));
+        setRecipes(transformedRecipes);
+      } catch (error) {
+        console.error('Error deleting recipe:', error);
+        alert('Erreur lors de la suppression de la recette');
+      }
     }
   };
 
@@ -97,6 +206,7 @@ export default function RecipesPage() {
       arm: 'GV',
       screw: 'GV',
       duration: 60,
+      status: 'Reversible',
     };
     setFormData({
       ...formData,
@@ -107,7 +217,7 @@ export default function RecipesPage() {
   const updateStep = (stepId: string, field: keyof RecipeStep, value: any) => {
     setFormData({
       ...formData,
-      steps: formData.steps?.map((step, index) => {
+      steps: formData.steps?.map((step) => {
         if (step.id === stepId) {
           const updated = { ...step, [field]: value };
           if (field === 'stepNumber') {
@@ -117,9 +227,9 @@ export default function RecipesPage() {
           return updated;
         }
         return step;
-      }).map((step, index) => ({
+      }).map((step, idx) => ({
         ...step,
-        stepNumber: index + 1,
+        stepNumber: idx + 1,
       })),
     });
   };
@@ -133,6 +243,10 @@ export default function RecipesPage() {
       })),
     });
   };
+
+  if (loading) {
+    return <div className="text-center py-8">Chargement...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -252,6 +366,9 @@ export default function RecipesPage() {
                         <th className="border p-2 text-left">Durée (s)</th>
                         <th className="border p-2 text-left">Produit</th>
                         <th className="border p-2 text-left">Poids (Kg)</th>
+                        <th className="border p-2 text-left">Vide (%)</th>
+                        <th className="border p-2 text-left">Critère</th>
+                        <th className="border p-2 text-left">Statut</th>
                         <th className="border p-2 text-left">Actions</th>
                       </tr>
                     </thead>
@@ -317,6 +434,39 @@ export default function RecipesPage() {
                               placeholder="Optionnel"
                               step="0.1"
                             />
+                          </td>
+                          <td className="border p-2">
+                            <input
+                              type="number"
+                              value={step.vacuum || ''}
+                              onChange={(e) => updateStep(step.id, 'vacuum', parseFloat(e.target.value))}
+                              className="w-full border rounded px-2 py-1"
+                              placeholder="Optionnel"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                            />
+                          </td>
+                          <td className="border p-2">
+                            <input
+                              type="text"
+                              value={step.critere || ''}
+                              onChange={(e) => updateStep(step.id, 'critere', e.target.value)}
+                              className="w-full border rounded px-2 py-1"
+                              placeholder="Critère de fin"
+                            />
+                          </td>
+                          <td className="border p-2">
+                            <select
+                              value={step.status || 'Reversible'}
+                              onChange={(e) => updateStep(step.id, 'status', e.target.value)}
+                              className="w-full border rounded px-2 py-1"
+                            >
+                              <option value="Reversible">Reversible</option>
+                              <option value="En attente">En attente</option>
+                              <option value="En cours">En cours</option>
+                              <option value="Terminée">Terminée</option>
+                            </select>
                           </td>
                           <td className="border p-2">
                             <button

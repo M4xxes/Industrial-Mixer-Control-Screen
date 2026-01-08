@@ -1,10 +1,12 @@
-export type MixerStatus = 'Arrêt' | 'Marche' | 'Erreur' | 'Maintenance';
+export type MixerStatus = 'Arrêt' | 'Production' | 'Pause' | 'Alarme';
 export type MotorStatus = 'Arrêt' | 'Marche' | 'Défaut' | 'Maintenance';
-export type StepStatus = 'En attente' | 'En cours' | 'En pause' | 'Terminée';
+export type StepStatus = 'En attente' | 'En cours' | 'En pause' | 'Terminée' | 'Reversible';
 export type AlarmLevel = 'Info' | 'Warning' | 'Critique';
 export type AlarmStatus = 'Active' | 'Acquittée';
 export type BatchStatus = 'En cours' | 'Terminé' | 'Interrompu' | 'Erreur' | 'Succès' | 'Alerte';
 export type InventoryStatus = 'Normal' | 'Bas' | 'Critique';
+export type UserRole = 'Admin' | 'B1/2' | 'B3/5' | 'B6/7' | 'Operator' | 'Viewer';
+export type ExecutionStatus = 'EN_COURS' | 'TERMINE' | 'ERREUR' | 'INTERROMPU';
 export type RecipeFunction = 
   | 'Démarrage' 
   | 'Dosage Automatique' 
@@ -33,6 +35,9 @@ export interface RecipeStep {
   duration: number; // en secondes
   product?: string;
   weight?: number; // en Kg
+  vacuum?: number; // vide(%)
+  critere?: string; // critère de fin d'étape
+  status?: StepStatus; // Statut de l'étape (Reversible, etc.)
 }
 
 export interface Mixer {
@@ -63,6 +68,27 @@ export interface Batch {
   operatorId?: string;
   steps: BatchStep[];
   metrics?: BatchMetric[];
+  // Nouveaux champs de production
+  formule?: string;
+  designation?: string;
+  fabricant?: string;
+  tempsRestantSec?: number;
+  produitConsigne?: number;
+  produitMesure?: number;
+  prochainAppelOperateurMin?: number;
+  appelPreparationVideMin?: number;
+  distribution?: BatchDistribution[];
+}
+
+export interface BatchDistribution {
+  id: number;
+  batchId: string;
+  productName: string; // 'Hydrocarb', 'Napvis D10', 'Napvis D200', 'Huile HM'
+  qteFormule: number; // Quantité formule
+  qteDosee: number; // Quantité dosée
+  dose: number; // Dose
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BatchStep {
@@ -125,6 +151,31 @@ export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'Admin' | 'Operator' | 'Viewer';
+  role: UserRole;
+}
+
+export interface EtapesExecution {
+  id: number;
+  cycleId: string;
+  etapeRecetteId: string;
+  numeroEtape: number;
+  dateDebut: string;
+  dateFin?: string;
+  dureeReelleSec?: number;
+  quantiteDosee?: number;
+  consigneAtteinte: boolean;
+  valeurCritere?: string;
+  statut: ExecutionStatus;
+  commentaire?: string;
+}
+
+export interface DefautCatalogue {
+  idDefaut: number;
+  automate: string;
+  codeDefaut: string;
+  description: string;
+  priorite: number;
+  createdAt: string;
+  updatedAt: string;
 }
 

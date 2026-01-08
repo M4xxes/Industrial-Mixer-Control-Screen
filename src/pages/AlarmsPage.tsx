@@ -1,32 +1,79 @@
-import { useState } from 'react';
-import { mockAlarms } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import { alarmsAPI } from '../services/api';
 import { Alarm, AlarmLevel, AlarmStatus } from '../types';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export default function AlarmsPage() {
-  const [alarms, setAlarms] = useState(mockAlarms);
+  const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     mixer: 'all',
     level: 'all',
     status: 'all',
+    period: '',
   });
 
-  const handleAcknowledge = (alarmId: string) => {
-    setAlarms(alarms.map(a =>
-      a.id === alarmId
-        ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
-        : a
-    ));
+  useEffect(() => {
+    const fetchAlarms = async () => {
+      try {
+        setLoading(true);
+        const data = await alarmsAPI.getAll();
+        // Transformer les données de l'API
+        const transformedAlarms: Alarm[] = data.map((a: any) => ({
+          id: a.id,
+          mixerId: a.mixerId || a.mixer_id,
+          alarmCode: a.alarmCode || a.alarm_code,
+          description: a.description,
+          level: a.level as AlarmLevel,
+          status: a.status as AlarmStatus,
+          occurredAt: a.occurredAt || a.occurred_at,
+          acknowledgedAt: a.acknowledgedAt || a.acknowledged_at,
+          acknowledgedBy: a.acknowledgedBy || a.acknowledged_by,
+        }));
+        setAlarms(transformedAlarms);
+      } catch (error) {
+        console.error('Error fetching alarms:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAlarms();
+    const interval = setInterval(fetchAlarms, 5000); // Rafraîchissement toutes les 5 secondes
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleAcknowledge = async (alarmId: string) => {
+    try {
+      await alarmsAPI.acknowledge(alarmId);
+      // Mettre à jour l'alarme localement
+      setAlarms(alarms.map(a =>
+        a.id === alarmId
+          ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
+          : a
+      ));
+    } catch (error) {
+      console.error('Error acknowledging alarm:', error);
+      alert('Erreur lors de l\'acquittement de l\'alarme');
+    }
   };
 
-  const handleAcknowledgeAll = () => {
-    if (confirm('Acquitter toutes les alarmes actives ?')) {
+  const handleAcknowledgeAll = async () => {
+    if (!confirm('Acquitter toutes les alarmes actives ?')) return;
+    
+    try {
+      const activeAlarmsToAcknowledge = alarms.filter(a => a.status === 'Active');
+      await Promise.all(activeAlarmsToAcknowledge.map(a => alarmsAPI.acknowledge(a.id)));
+      
+      // Mettre à jour toutes les alarmes localement
       setAlarms(alarms.map(a =>
         a.status === 'Active'
           ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
           : a
       ));
+    } catch (error) {
+      console.error('Error acknowledging all alarms:', error);
+      alert('Erreur lors de l\'acquittement des alarmes');
     }
   };
 
@@ -34,6 +81,14 @@ export default function AlarmsPage() {
     if (filters.mixer !== 'all' && alarm.mixerId !== parseInt(filters.mixer)) return false;
     if (filters.level !== 'all' && alarm.level !== filters.level) return false;
     if (filters.status !== 'all' && alarm.status !== filters.status) return false;
+    // Filtre par période (si implémenté)
+    if (filters.period) {
+      const alarmDate = new Date(alarm.occurredAt);
+      const now = new Date();
+      const periodDays = parseInt(filters.period);
+      const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+      if (alarmDate < periodStart) return false;
+    }
     return true;
   });
 
@@ -93,7 +148,7 @@ export default function AlarmsPage() {
       {/* Filtres */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Filtres</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Malaxeur
@@ -138,10 +193,30 @@ export default function AlarmsPage() {
               <option value="Acquittée">Acquittée</option>
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Période
+            </label>
+            <select
+              value={filters.period}
+              onChange={(e) => setFilters({ ...filters, period: e.target.value })}
+              className="w-full border rounded-md px-3 py-2"
+            >
+              <option value="">Toutes</option>
+              <option value="1">Dernière heure</option>
+              <option value="24">Dernières 24h</option>
+              <option value="168">7 derniers jours</option>
+              <option value="720">30 derniers jours</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Liste des alarmes */}
+      {loading ? (
+        <div className="text-center py-8">Chargement...</div>
+      ) : (
+        <>
+          {/* Liste des alarmes */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Liste des alarmes</h2>
         <div className="overflow-x-auto">
@@ -222,7 +297,9 @@ export default function AlarmsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+        </div>
+        </>
+      )}
     </div>
   );
 }

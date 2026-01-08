@@ -24,17 +24,45 @@ Application web moderne pour la supervision et le contrôle de 6 malaxeurs indus
 
 ## Installation
 
+### Backend (Serveur API)
+
+1. Aller dans le dossier server :
+```bash
+cd server
+npm install
+```
+
+2. Initialiser la base de données :
+```bash
+npm run init-db
+node seed-data.js
+```
+
+3. Démarrer le serveur :
+```bash
+npm start
+```
+
+Le serveur API sera accessible sur `http://localhost:3001`
+
+### Frontend
+
 1. Installer les dépendances :
 ```bash
 npm install
 ```
 
-2. Lancer le serveur de développement :
+2. Créer un fichier `.env` à la racine du projet :
+```
+VITE_API_URL=http://localhost:3001/api
+```
+
+3. Lancer le serveur de développement :
 ```bash
 npm run dev
 ```
 
-3. Ouvrir [http://localhost:5173](http://localhost:5173) dans le navigateur
+4. Ouvrir [http://localhost:5173](http://localhost:5173) dans le navigateur
 
 ## Structure du projet
 
@@ -106,11 +134,36 @@ npm run build
 
 Les fichiers optimisés seront générés dans le dossier `dist/`.
 
+## Base de Données
+
+Le système utilise SQLite pour le développement, facilement migrable vers PostgreSQL en production.
+
+### Structure de la base de données
+
+- **mixers** : Informations en temps réel des 6 malaxeurs
+- **recipes** : Recettes de production
+- **recipe_steps** : Étapes des recettes (32 étapes par recette)
+- **batches** : Lots de production
+- **batch_steps** : Étapes exécutées avec écarts
+- **batch_metrics** : Métriques temporelles (température, vitesse, puissance)
+- **inventory** : Stocks des 26 produits
+- **inventory_transactions** : Historique des transactions
+- **alarms** : Alarmes du système
+- **users** : Utilisateurs et droits
+
+### Connexion à la base de données
+
+Le frontend se connecte automatiquement à l'API backend qui gère la base de données. Les données sont rafraîchies automatiquement :
+- Toutes les 5 secondes pour la liste des malaxeurs
+- Toutes les 2 secondes pour le détail d'un malaxeur
+
 ## Notes
 
-- Les données sont actuellement mockées dans `src/data/mockData.ts`
-- Pour la production, il faudra connecter l'API backend (Node-RED) et la base de données PostgreSQL
-- L'authentification utilisateur n'est pas encore implémentée (simulée pour le mode admin)
+- ✅ Les données sont maintenant stockées en base de données SQLite
+- ✅ API REST complète pour toutes les opérations
+- ✅ Connexion frontend-backend opérationnelle
+- Pour la production, migrer vers PostgreSQL et connecter Node-RED pour OPC UA
+- L'authentification utilisateur est préparée dans la base de données mais pas encore implémentée dans l'interface
 
 ## Prochaines étapes
 
