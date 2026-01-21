@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
 
-const db = new sqlite3.Database('./database.sqlite');
+const db = new sqlite3.Database('./server/database.sqlite');
 
 const run = promisify(db.run.bind(db));
 const get = promisify(db.get.bind(db));
@@ -11,67 +11,222 @@ async function seedData() {
   try {
     console.log('Insertion des données de test...');
 
-    // Créer des recettes avec étapes
-    const recipe1Id = uuidv4();
-    await run(`
-      INSERT OR REPLACE INTO recipes (id, name, description, is_active)
-      VALUES (?, ?, ?, ?)
-    `, [recipe1Id, 'Recette A - Standard', 'Recette standard de production', 1]);
-
-    // Insérer 32 étapes pour la recette 1
-    const functions = [
-      { type: 'Démarrage', duration: 10 },
-      { type: 'Dosage Automatique', duration: 120, product: 'NAPVIS D200', weight: 50 },
-      { type: 'Mélange', duration: 300 },
-      { type: 'Dosage Automatique', duration: 180, product: 'Hydrocarbure OG', weight: 30 },
-      { type: 'Mélange', duration: 240 },
-      { type: 'Introduction Manuelle', duration: 60, product: 'Additif A', weight: 5 },
-      { type: 'Mélange', duration: 180 },
-      { type: 'Dosage Automatique', duration: 150, product: 'Catalyseur', weight: 2 },
-      { type: 'Mélange', duration: 200 },
-      { type: 'Prépa mise au vide', duration: 30 },
-      { type: 'Mise au vide', duration: 600 },
-      { type: 'Mélange', duration: 300 },
-      { type: 'Dosage Automatique', duration: 120, product: 'Polymère B', weight: 40 },
-      { type: 'Mélange', duration: 240 },
-      { type: 'Introduction Manuelle', duration: 60, product: 'Additif B', weight: 3 },
-      { type: 'Mélange', duration: 180 },
-      { type: 'Dosage Automatique', duration: 100, product: 'Huile', weight: 10 },
-      { type: 'Mélange', duration: 200 },
-      { type: 'Prépa mise au vide', duration: 30 },
-      { type: 'Mise au vide', duration: 600 },
-      { type: 'Mélange', duration: 300 },
-      { type: 'Dosage Automatique', duration: 140, product: 'Composant C', weight: 25 },
-      { type: 'Mélange', duration: 240 },
-      { type: 'Introduction Manuelle', duration: 60, product: 'Additif C', weight: 4 },
-      { type: 'Mélange', duration: 180 },
-      { type: 'Dosage Automatique', duration: 110, product: 'D10', weight: 15 },
-      { type: 'Mélange', duration: 200 },
-      { type: 'Prépa mise au vide', duration: 30 },
-      { type: 'Mise au vide', duration: 600 },
-      { type: 'Mélange', duration: 300 },
-      { type: 'Extrusion', duration: 1200 },
-    ];
-
-    for (let i = 0; i < functions.length; i++) {
-      const func = functions[i];
-      const stepId = uuidv4();
+    // Fonction pour créer une recette avec ses étapes
+    const createRecipeWithSteps = async (name, description, steps) => {
+      // Vérifier si la recette existe déjà
+      const existing = await get('SELECT id FROM recipes WHERE name = ?', [name]);
+      if (existing) {
+        console.log(`Recette "${name}" existe déjà, suppression...`);
+        await run('DELETE FROM recipe_steps WHERE recipe_id = ?', [existing.id]);
+        await run('DELETE FROM recipes WHERE id = ?', [existing.id]);
+      }
+      
+      const recipeId = uuidv4();
       await run(`
-        INSERT OR REPLACE INTO recipe_steps 
-        (id, recipe_id, step_number, function, arm, screw, duration, product, weight)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        stepId,
-        recipe1Id,
-        i + 1,
-        func.type,
-        i % 2 === 0 ? 'GV' : 'PV',
-        i % 3 === 0 ? 'GV' : 'PV',
-        func.duration,
-        func.product || null,
-        func.weight || null,
-      ]);
-    }
+        INSERT INTO recipes (id, name, description, is_active)
+        VALUES (?, ?, ?, ?)
+      `, [recipeId, name, description, 1]);
+
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const stepId = uuidv4();
+        await run(`
+          INSERT OR REPLACE INTO recipe_steps 
+          (id, recipe_id, step_number, function, arm, screw, duration, product, weight, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          stepId,
+          recipeId,
+          i + 1,
+          step.type,
+          i % 2 === 0 ? 'GV' : 'PV',
+          i % 3 === 0 ? 'GV' : 'PV',
+          step.duration,
+          step.product || null,
+          step.weight || null,
+          'Reversible',
+        ]);
+      }
+      return recipeId;
+    };
+
+    // Recette A - Standard (32 étapes)
+    const recipeAId = await createRecipeWithSteps(
+      'Recette A - Standard',
+      'Recette standard de production avec processus complet',
+      [
+        { type: 'Démarrage', duration: 10 },
+        { type: 'Dosage Automatique', duration: 120, product: 'NAPVIS D200', weight: 50 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Dosage Automatique', duration: 180, product: 'Hydrocarbure OG', weight: 30 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Introduction Manuelle', duration: 60, product: 'Additif A', weight: 5 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Dosage Automatique', duration: 150, product: 'Catalyseur', weight: 2 },
+        { type: 'Mélange', duration: 200 },
+        { type: 'Prépa mise au vide', duration: 30 },
+        { type: 'Mise au vide', duration: 600 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Dosage Automatique', duration: 120, product: 'Polymère B', weight: 40 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Introduction Manuelle', duration: 60, product: 'Additif B', weight: 3 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Dosage Automatique', duration: 100, product: 'Huile', weight: 10 },
+        { type: 'Mélange', duration: 200 },
+        { type: 'Prépa mise au vide', duration: 30 },
+        { type: 'Mise au vide', duration: 600 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Dosage Automatique', duration: 140, product: 'Composant C', weight: 25 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Introduction Manuelle', duration: 60, product: 'Additif C', weight: 4 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Dosage Automatique', duration: 110, product: 'D10', weight: 15 },
+        { type: 'Mélange', duration: 200 },
+        { type: 'Prépa mise au vide', duration: 30 },
+        { type: 'Mise au vide', duration: 600 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Extrusion', duration: 1200 },
+      ]
+    );
+
+    // Recette B - Rapide (20 étapes, optimisée)
+    const recipeBId = await createRecipeWithSteps(
+      'Recette B - Rapide',
+      'Recette optimisée pour production rapide',
+      [
+        { type: 'Démarrage', duration: 10 },
+        { type: 'Dosage Automatique', duration: 90, product: 'NAPVIS D200', weight: 45 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Dosage Automatique', duration: 120, product: 'Hydrocarbure OG', weight: 25 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Dosage Automatique', duration: 100, product: 'Catalyseur', weight: 2 },
+        { type: 'Mélange', duration: 150 },
+        { type: 'Prépa mise au vide', duration: 20 },
+        { type: 'Mise au vide', duration: 450 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Dosage Automatique', duration: 90, product: 'Polymère B', weight: 35 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Dosage Automatique', duration: 80, product: 'Huile', weight: 8 },
+        { type: 'Mélange', duration: 150 },
+        { type: 'Prépa mise au vide', duration: 20 },
+        { type: 'Mise au vide', duration: 450 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Dosage Automatique', duration: 100, product: 'D10', weight: 12 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Extrusion', duration: 900 },
+      ]
+    );
+
+    // Recette C - Précision (32 étapes, haute précision)
+    const recipeCId = await createRecipeWithSteps(
+      'Recette C - Précision',
+      'Recette pour haute précision avec contrôles renforcés',
+      [
+        { type: 'Démarrage', duration: 15 },
+        { type: 'Dosage Automatique', duration: 150, product: 'NAPVIS D200', weight: 50 },
+        { type: 'Mélange', duration: 360 },
+        { type: 'Dosage Automatique', duration: 200, product: 'Hydrocarbure OG', weight: 30 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Introduction Manuelle', duration: 90, product: 'Additif A', weight: 5 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Dosage Automatique', duration: 180, product: 'Catalyseur', weight: 2.5 },
+        { type: 'Mélange', duration: 250 },
+        { type: 'Prépa mise au vide', duration: 40 },
+        { type: 'Mise au vide', duration: 720 },
+        { type: 'Mélange', duration: 360 },
+        { type: 'Dosage Automatique', duration: 150, product: 'Polymère B', weight: 40 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Introduction Manuelle', duration: 90, product: 'Additif B', weight: 3 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Dosage Automatique', duration: 130, product: 'Huile', weight: 10 },
+        { type: 'Mélange', duration: 250 },
+        { type: 'Prépa mise au vide', duration: 40 },
+        { type: 'Mise au vide', duration: 720 },
+        { type: 'Mélange', duration: 360 },
+        { type: 'Dosage Automatique', duration: 170, product: 'Composant C', weight: 25 },
+        { type: 'Mélange', duration: 300 },
+        { type: 'Introduction Manuelle', duration: 90, product: 'Additif C', weight: 4 },
+        { type: 'Mélange', duration: 240 },
+        { type: 'Dosage Automatique', duration: 140, product: 'D10', weight: 15 },
+        { type: 'Mélange', duration: 250 },
+        { type: 'Prépa mise au vide', duration: 40 },
+        { type: 'Mise au vide', duration: 720 },
+        { type: 'Mélange', duration: 360 },
+        { type: 'Extrusion', duration: 1500 },
+      ]
+    );
+
+    // Recette D - Économique (25 étapes)
+    const recipeDId = await createRecipeWithSteps(
+      'Recette D - Économique',
+      'Recette optimisée pour réduire la consommation de matières premières',
+      [
+        { type: 'Démarrage', duration: 10 },
+        { type: 'Dosage Automatique', duration: 100, product: 'NAPVIS D200', weight: 40 },
+        { type: 'Mélange', duration: 270 },
+        { type: 'Dosage Automatique', duration: 150, product: 'Hydrocarbure OG', weight: 25 },
+        { type: 'Mélange', duration: 210 },
+        { type: 'Introduction Manuelle', duration: 50, product: 'Additif A', weight: 4 },
+        { type: 'Mélange', duration: 160 },
+        { type: 'Dosage Automatique', duration: 120, product: 'Catalyseur', weight: 1.5 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Prépa mise au vide', duration: 25 },
+        { type: 'Mise au vide', duration: 540 },
+        { type: 'Mélange', duration: 270 },
+        { type: 'Dosage Automatique', duration: 100, product: 'Polymère B', weight: 35 },
+        { type: 'Mélange', duration: 210 },
+        { type: 'Introduction Manuelle', duration: 50, product: 'Additif B', weight: 2.5 },
+        { type: 'Mélange', duration: 160 },
+        { type: 'Dosage Automatique', duration: 90, product: 'Huile', weight: 8 },
+        { type: 'Mélange', duration: 180 },
+        { type: 'Prépa mise au vide', duration: 25 },
+        { type: 'Mise au vide', duration: 540 },
+        { type: 'Mélange', duration: 270 },
+        { type: 'Dosage Automatique', duration: 110, product: 'D10', weight: 12 },
+        { type: 'Mélange', duration: 210 },
+        { type: 'Prépa mise au vide', duration: 25 },
+        { type: 'Extrusion', duration: 1080 },
+      ]
+    );
+
+    // Recette E - Spéciale (28 étapes)
+    const recipeEId = await createRecipeWithSteps(
+      'Recette E - Spéciale',
+      'Recette spéciale avec traitement renforcé',
+      [
+        { type: 'Démarrage', duration: 12 },
+        { type: 'Dosage Automatique', duration: 130, product: 'NAPVIS D200', weight: 48 },
+        { type: 'Mélange', duration: 330 },
+        { type: 'Dosage Automatique', duration: 170, product: 'Hydrocarbure OG', weight: 28 },
+        { type: 'Mélange', duration: 270 },
+        { type: 'Introduction Manuelle', duration: 70, product: 'Additif A', weight: 5 },
+        { type: 'Mélange', duration: 220 },
+        { type: 'Dosage Automatique', duration: 140, product: 'Catalyseur', weight: 2.2 },
+        { type: 'Mélange', duration: 230 },
+        { type: 'Prépa mise au vide', duration: 35 },
+        { type: 'Mise au vide', duration: 660 },
+        { type: 'Mélange', duration: 330 },
+        { type: 'Dosage Automatique', duration: 130, product: 'Polymère B', weight: 38 },
+        { type: 'Mélange', duration: 270 },
+        { type: 'Introduction Manuelle', duration: 70, product: 'Additif B', weight: 3 },
+        { type: 'Mélange', duration: 220 },
+        { type: 'Dosage Automatique', duration: 110, product: 'Huile', weight: 9 },
+        { type: 'Mélange', duration: 230 },
+        { type: 'Prépa mise au vide', duration: 35 },
+        { type: 'Mise au vide', duration: 660 },
+        { type: 'Mélange', duration: 330 },
+        { type: 'Dosage Automatique', duration: 150, product: 'Composant C', weight: 24 },
+        { type: 'Mélange', duration: 270 },
+        { type: 'Introduction Manuelle', duration: 70, product: 'Additif C', weight: 4 },
+        { type: 'Mélange', duration: 220 },
+        { type: 'Dosage Automatique', duration: 120, product: 'D10', weight: 14 },
+        { type: 'Mélange', duration: 230 },
+        { type: 'Extrusion', duration: 1350 },
+      ]
+    );
+
+    // Utiliser la recette A par défaut pour les mixers
+    const recipe1Id = recipeAId;
 
     // Mettre à jour les mixers avec des recettes
     await run(`UPDATE mixers SET recipe_id = ?, current_step = 5, progress = 65, temperature = 85.5, pressure = 1.2, speed = 45, power = 12.5, batch_progress = 15.5 WHERE id = 1`, [recipe1Id]);

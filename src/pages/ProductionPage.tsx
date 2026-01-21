@@ -15,6 +15,8 @@ export default function ProductionPage() {
   const [etapesExecution, setEtapesExecution] = useState<EtapesExecution[]>([]);
   const [operatorName, setOperatorName] = useState('');
   const [selectedRecipeId, setSelectedRecipeId] = useState<{ [key: number]: string }>({});
+  const [batchNumbers, setBatchNumbers] = useState<{ [key: number]: string }>({});
+  const [batchNumberInput, setBatchNumberInput] = useState<{ [key: number]: string }>({});
 
   // Déterminer les IDs des malaxeurs selon la paire
   const getMixerIds = () => {
@@ -39,6 +41,8 @@ export default function ProductionPage() {
         ]);
         setRecipes(recipesData);
         setAlarms(alarmsData);
+        // Les données sont déjà transformées par transformKeys dans api.ts (snake_case -> camelCase)
+        // S'assurer que toutes les données sont bien présentes
         setBatches(batchesData);
         
         // Récupérer les étapes d'exécution pour tous les batches en cours (pour les malaxeurs affichés)
@@ -79,11 +83,13 @@ export default function ProductionPage() {
       return;
     }
     
+    const batchNumber = batchNumberInput[mixerId] || `BATCH-${Date.now()}`;
+    
     try {
       await mixersAPI.startRecipe(mixerId, {
         recipe_id: recipeId,
         operator_id: operatorName,
-        batch_number: `BATCH-${Date.now()}`,
+        batch_number: batchNumber,
       });
       window.location.reload();
     } catch (error) {
@@ -187,7 +193,7 @@ export default function ProductionPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Production - {pair}</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Production - {pair?.replace('B', 'BUTYL') || pair}</h1>
       </div>
 
       {/* Zone opérateur */}
@@ -261,7 +267,7 @@ export default function ProductionPage() {
               </div>
 
               {/* Boutons de commande */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => handleStartRecipe(mixer.id)}
                   disabled={mixer.status === 'Production'}
@@ -278,30 +284,62 @@ export default function ProductionPage() {
                   <Check className="w-4 h-4" />
                   Valide Etape
                 </button>
+                <button
+                  onClick={() => handleEndRecipe(mixer.id)}
+                  disabled={mixer.status !== 'Production'}
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  <Square className="w-4 h-4" />
+                  Fin Recette
+                </button>
               </div>
 
               {/* Paramètres du processus - TOUJOURS AFFICHÉS */}
               <div className="space-y-2 text-sm border-t border-yellow-400 pt-4">
+                {/* N° Lot en premier avec case d'écriture + déroulant */}
+                <div className="space-y-2">
+                  <label className="text-yellow-400 font-medium">N° Lot:</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={batchNumberInput[mixer.id] || batch?.batchNumber || ''}
+                      onChange={(e) => setBatchNumberInput({ ...batchNumberInput, [mixer.id]: e.target.value })}
+                      placeholder="Numéro de lot"
+                      className="flex-1 px-2 py-1 bg-gray-800 border border-yellow-400 text-yellow-300 rounded text-sm"
+                      disabled={mixer.status === 'Production'}
+                    />
+                    <select
+                      value={batchNumbers[mixer.id] || ''}
+                      onChange={(e) => {
+                        setBatchNumbers({ ...batchNumbers, [mixer.id]: e.target.value });
+                        if (e.target.value) {
+                          setBatchNumberInput({ ...batchNumberInput, [mixer.id]: e.target.value });
+                        }
+                      }}
+                      className="px-2 py-1 bg-gray-800 border border-yellow-400 text-yellow-300 rounded text-sm"
+                      disabled={mixer.status === 'Production'}
+                    >
+                      <option value="">Sélectionner</option>
+                      {/* Pour l'instant liste vide, sera remplie depuis la base de données plus tard */}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-yellow-400">Opérateur/Fabricant:</span>
+                  <span className="text-yellow-300 font-medium">
+                    {batch?.fabricant || batch?.operatorId || operatorName || '-'}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-yellow-400">Formule:</span>
                   <span className="text-yellow-300 font-medium">
-                    {batch?.formule || mixer.recipe?.name || '-'}
+                    {batch?.formule || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-yellow-400">Désignation:</span>
                   <span className="text-yellow-300 font-medium">
-                    {batch?.designation || mixer.recipe?.description || '-'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-yellow-400">N° Lot:</span>
-                  <span className="text-yellow-300 font-medium">{batch?.batchNumber || '-'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-yellow-400">Fabricant:</span>
-                  <span className="text-yellow-300 font-medium">
-                    {batch?.fabricant || batch?.operatorId || operatorName || '-'}
+                    {batch?.designation || '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -395,6 +433,49 @@ export default function ProductionPage() {
                 </div>
               </div>
 
+              {/* Liste des étapes de la recette en cours */}
+              {mixer.recipe && mixer.status === 'Production' && (
+                <div className="border-t border-yellow-400 pt-4">
+                  <h3 className="text-lg font-semibold text-yellow-400 mb-3">Étapes de la recette</h3>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {mixer.recipe.steps.map((step, index) => {
+                      const stepNum = index + 1;
+                      const isCompleted = stepNum < (mixer.currentStep || 0);
+                      const isCurrent = stepNum === (mixer.currentStep || 0);
+                      const stepExec = batch ? getCurrentEtapeExecution(batch.id, stepNum) : null;
+                      
+                      let bgColor = 'bg-gray-800'; // Blanc/par défaut (pas faite)
+                      if (isCompleted || stepExec?.statut === 'TERMINE') {
+                        bgColor = 'bg-green-900/50'; // Vert (finie)
+                      } else if (isCurrent || stepExec?.statut === 'EN_COURS') {
+                        bgColor = 'bg-gray-700'; // Gris (en cours)
+                      }
+                      
+                      return (
+                        <div
+                          key={step.id}
+                          className={`p-2 rounded text-sm border border-yellow-400/30 ${bgColor}`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="text-yellow-300 font-medium">
+                              Étape {stepNum}: {step.function}
+                            </span>
+                            <span className="text-yellow-400 text-xs">
+                              {step.duration}s
+                            </span>
+                          </div>
+                          {step.product && (
+                            <div className="text-yellow-400/80 text-xs mt-1">
+                              {step.product} {step.weight ? `(${step.weight.toFixed(2)} Kg)` : ''}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Section DISTRIBUTION - TOUJOURS AFFICHÉE */}
               <div className="border-t border-yellow-400 pt-4">
                 <h3 className="text-lg font-semibold text-yellow-400 mb-3">DISTRIBUTION</h3>
@@ -413,13 +494,13 @@ export default function ProductionPage() {
                         <tr key={index} className="border-b border-yellow-400/30">
                           <td className="py-2 pr-4 text-yellow-300 font-medium">{item.productName}:</td>
                           <td className="text-right py-2 px-2 text-yellow-300">
-                            {item.qteFormule !== undefined && item.qteFormule !== null ? item.qteFormule.toFixed(2) : '-'}
+                            {item.qteFormule !== undefined && item.qteFormule !== null ? `${item.qteFormule.toFixed(2)} Kg` : '-'}
                           </td>
                           <td className="text-right py-2 px-2 text-yellow-300">
-                            {item.qteDosee !== undefined && item.qteDosee !== null ? item.qteDosee.toFixed(2) : '-'}
+                            {item.qteDosee !== undefined && item.qteDosee !== null ? `${item.qteDosee.toFixed(2)} Kg` : '-'}
                           </td>
                           <td className="text-right py-2 px-2 text-yellow-300">
-                            {item.dose !== undefined && item.dose !== null ? item.dose.toFixed(2) : '-'}
+                            {item.dose !== undefined && item.dose !== null ? `${item.dose.toFixed(2)} Kg` : '-'}
                           </td>
                         </tr>
                       ))}

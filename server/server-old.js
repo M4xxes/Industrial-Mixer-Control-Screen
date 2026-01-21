@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// Ce fichier a été migré vers MySQL
+// Voir server-mysql.js pour la version adaptée
 import express from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,15 +16,15 @@ app.get('/', (req, res) => {
   res.json({
     message: 'API Supervision Multi-Malaxeurs',
     version: '1.0.0',
-    endpoints: {
-      mixers: '/api/mixers',
-      recipes: '/api/recipes',
-      inventory: '/api/inventory',
-      alarms: '/api/alarms',
-      batches: '/api/batches',
-      defauts: '/api/defauts',
-      etapesExecution: '/api/etapes-execution',
-    },
+      endpoints: {
+        mixers: '/api/mixers',
+        recipes: '/api/recipes',
+        inventory: '/api/inventory',
+        alarms: '/api/alarms',
+        batches: '/api/batches',
+        defauts: '/api/defauts',
+        etapesExecution: '/api/etapes-execution',
+      },
   });
 });
 
@@ -33,11 +34,11 @@ app.get('/', (req, res) => {
 app.get('/api/mixers', async (req, res) => {
   try {
     const mixers = await all(`
-      SELECT m.*, r.nom as recipe_name
+      SELECT m.*, r.name as recipe_name
       FROM mixers m
-      LEFT JOIN recettes r ON m.recipe_id = r.id
+      LEFT JOIN recipes r ON m.recipe_id = r.id
       ORDER BY m.id
-    `, [], 'supervision');
+    `);
     res.json(mixers);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -47,16 +48,16 @@ app.get('/api/mixers', async (req, res) => {
 // GET /api/mixers/:id - Détails d'un malaxeur
 app.get('/api/mixers/:id', async (req, res) => {
   try {
-    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
+    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     if (!mixer) {
       return res.status(404).json({ error: 'Malaxeur non trouvé' });
     }
     
     // Récupérer la recette si elle existe
     if (mixer.recipe_id) {
-      const recipe = await get('SELECT * FROM recettes WHERE id = ?', [mixer.recipe_id], 'supervision');
+      const recipe = await get('SELECT * FROM recipes WHERE id = ?', [mixer.recipe_id]);
       if (recipe) {
-        const steps = await all('SELECT * FROM etapes_recette WHERE recette_id = ? ORDER BY numero_etape', [recipe.id], 'supervision');
+        const steps = await all('SELECT * FROM recipe_steps WHERE recipe_id = ? ORDER BY step_number', [recipe.id]);
         mixer.recipe = { ...recipe, steps };
       }
     }
@@ -87,9 +88,9 @@ app.put('/api/mixers/:id', async (req, res) => {
           batch_progress = COALESCE(?, batch_progress),
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [status, recipe_id, current_step, progress, temperature, pressure, speed, power, motor_arm, motor_screw, batch_progress, req.params.id], 'supervision');
+    `, [status, recipe_id, current_step, progress, temperature, pressure, speed, power, motor_arm, motor_screw, batch_progress, req.params.id]);
     
-    const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
+    const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -101,9 +102,9 @@ app.put('/api/mixers/:id', async (req, res) => {
 // GET /api/recipes - Liste toutes les recettes
 app.get('/api/recipes', async (req, res) => {
   try {
-    const recipes = await all('SELECT * FROM recettes WHERE actif = 1 ORDER BY date_creation DESC', [], 'supervision');
+    const recipes = await all('SELECT * FROM recipes ORDER BY created_at DESC');
     for (const recipe of recipes) {
-      recipe.steps = await all('SELECT * FROM etapes_recette WHERE recette_id = ? ORDER BY numero_etape', [recipe.id], 'supervision');
+      recipe.steps = await all('SELECT * FROM recipe_steps WHERE recipe_id = ? ORDER BY step_number', [recipe.id]);
     }
     res.json(recipes);
   } catch (error) {
@@ -114,11 +115,11 @@ app.get('/api/recipes', async (req, res) => {
 // GET /api/recipes/:id - Détails d'une recette
 app.get('/api/recipes/:id', async (req, res) => {
   try {
-    const recipe = await get('SELECT * FROM recettes WHERE id = ?', [req.params.id], 'supervision');
+    const recipe = await get('SELECT * FROM recipes WHERE id = ?', [req.params.id]);
     if (!recipe) {
       return res.status(404).json({ error: 'Recette non trouvée' });
     }
-    recipe.steps = await all('SELECT * FROM etapes_recette WHERE recette_id = ? ORDER BY numero_etape', [recipe.id], 'supervision');
+    recipe.steps = await all('SELECT * FROM recipe_steps WHERE recipe_id = ? ORDER BY step_number', [recipe.id]);
     res.json(recipe);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -128,39 +129,25 @@ app.get('/api/recipes/:id', async (req, res) => {
 // POST /api/recipes - Créer une recette
 app.post('/api/recipes', async (req, res) => {
   try {
-    const { name, description, mixerName, steps } = req.body;
+    const { name, description, steps } = req.body;
+    const recipeId = uuidv4();
     
-    // Insérer la recette (MySQL utilise AUTO_INCREMENT, pas besoin d'UUID)
-    const result = await run(`
-      INSERT INTO recettes (code, nom, description, malaxeur, actif, date_creation, date_modification)
-      VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `, [name, name, description || '', mixerName || 'MB6'], 'supervision');
-    
-    const recipeId = result.id;
+    await run(`
+      INSERT INTO recipes (id, name, description, created_at, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [recipeId, name, description]);
     
     // Insérer les étapes
     for (const step of steps || []) {
+      const stepId = uuidv4();
       await run(`
-        INSERT INTO etapes_recette 
-        (recette_id, numero_etape, fonction, bras, vis, refroidissement, duree_maxi_sec, produit, consigne_kg, vide_pourcent, critere)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        recipeId, 
-        step.stepNumber || step.numero_etape, 
-        step.function || step.fonction, 
-        step.arm || step.bras, 
-        step.screw || step.vis,
-        step.refroidissement || 'Non',
-        step.duration || step.duree_maxi_sec, 
-        step.product || step.produit || null, 
-        step.weight || step.consigne_kg || null, 
-        step.vacuum || step.vide_pourcent || null,
-        step.critere || null
-      ], 'supervision');
+        INSERT INTO recipe_steps (id, recipe_id, step_number, function, arm, screw, duration, product, weight, vacuum, critere, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [stepId, recipeId, step.stepNumber, step.function, step.arm, step.screw, step.duration, step.product || null, step.weight || null, step.vacuum || null, step.critere || null, step.status || 'Reversible']);
     }
     
-    const recipe = await get('SELECT * FROM recettes WHERE id = ?', [recipeId], 'supervision');
-    recipe.steps = await all('SELECT * FROM etapes_recette WHERE recette_id = ? ORDER BY numero_etape', [recipeId], 'supervision');
+    const recipe = await get('SELECT * FROM recipes WHERE id = ?', [recipeId]);
+    recipe.steps = await all('SELECT * FROM recipe_steps WHERE recipe_id = ? ORDER BY step_number', [recipeId]);
     res.status(201).json(recipe);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -170,50 +157,38 @@ app.post('/api/recipes', async (req, res) => {
 // PUT /api/recipes/:id - Modifier une recette
 app.put('/api/recipes/:id', async (req, res) => {
   try {
-    const { name, description, mixerName, steps } = req.body;
+    const { name, description, steps } = req.body;
     
     await run(`
-      UPDATE recettes 
-      SET nom = ?, code = ?, description = ?, malaxeur = ?, date_modification = CURRENT_TIMESTAMP
+      UPDATE recipes 
+      SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [name, name, description || '', mixerName || 'MB6', req.params.id], 'supervision');
+    `, [name, description, req.params.id]);
     
     // Supprimer les anciennes étapes
-    await run('DELETE FROM etapes_recette WHERE recette_id = ?', [req.params.id], 'supervision');
+    await run('DELETE FROM recipe_steps WHERE recipe_id = ?', [req.params.id]);
     
     // Insérer les nouvelles étapes
     for (const step of steps || []) {
+      const stepId = uuidv4();
       await run(`
-        INSERT INTO etapes_recette 
-        (recette_id, numero_etape, fonction, bras, vis, refroidissement, duree_maxi_sec, produit, consigne_kg, vide_pourcent, critere)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        req.params.id, 
-        step.stepNumber || step.numero_etape, 
-        step.function || step.fonction, 
-        step.arm || step.bras, 
-        step.screw || step.vis,
-        step.refroidissement || 'Non',
-        step.duration || step.duree_maxi_sec, 
-        step.product || step.produit || null, 
-        step.weight || step.consigne_kg || null, 
-        step.vacuum || step.vide_pourcent || null,
-        step.critere || null
-      ], 'supervision');
+        INSERT INTO recipe_steps (id, recipe_id, step_number, function, arm, screw, duration, product, weight, vacuum, critere, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [stepId, req.params.id, step.stepNumber, step.function, step.arm, step.screw, step.duration, step.product || null, step.weight || null, step.vacuum || null, step.critere || null, step.status || 'Reversible']);
     }
     
-    const recipe = await get('SELECT * FROM recettes WHERE id = ?', [req.params.id], 'supervision');
-    recipe.steps = await all('SELECT * FROM etapes_recette WHERE recette_id = ? ORDER BY numero_etape', [recipe.id], 'supervision');
+    const recipe = await get('SELECT * FROM recipes WHERE id = ?', [req.params.id]);
+    recipe.steps = await all('SELECT * FROM recipe_steps WHERE recipe_id = ? ORDER BY step_number', [req.params.id]);
     res.json(recipe);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// DELETE /api/recipes/:id - Supprimer une recette (désactiver)
+// DELETE /api/recipes/:id - Supprimer une recette
 app.delete('/api/recipes/:id', async (req, res) => {
   try {
-    await run('UPDATE recettes SET actif = 0 WHERE id = ?', [req.params.id], 'supervision');
+    await run('DELETE FROM recipes WHERE id = ?', [req.params.id]);
     res.json({ message: 'Recette supprimée' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -225,7 +200,7 @@ app.delete('/api/recipes/:id', async (req, res) => {
 // GET /api/inventory - Liste tous les produits
 app.get('/api/inventory', async (req, res) => {
   try {
-    const inventory = await all('SELECT * FROM inventory ORDER BY product_name', [], 'supervision');
+    const inventory = await all('SELECT * FROM inventory ORDER BY product_name');
     res.json(inventory);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -236,7 +211,7 @@ app.get('/api/inventory', async (req, res) => {
 app.put('/api/inventory/:id', async (req, res) => {
   try {
     const { current_quantity } = req.body;
-    const product = await get('SELECT * FROM inventory WHERE id = ?', [req.params.id], 'supervision');
+    const product = await get('SELECT * FROM inventory WHERE id = ?', [req.params.id]);
     
     if (!product) {
       return res.status(404).json({ error: 'Produit non trouvé' });
@@ -254,9 +229,9 @@ app.put('/api/inventory/:id', async (req, res) => {
       UPDATE inventory 
       SET current_quantity = ?, status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [current_quantity, status, req.params.id], 'supervision');
+    `, [current_quantity, status, req.params.id]);
     
-    const updated = await get('SELECT * FROM inventory WHERE id = ?', [req.params.id], 'supervision');
+    const updated = await get('SELECT * FROM inventory WHERE id = ?', [req.params.id]);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -268,7 +243,7 @@ app.put('/api/inventory/:id', async (req, res) => {
 // GET /api/alarms - Liste toutes les alarmes
 app.get('/api/alarms', async (req, res) => {
   try {
-    const alarms = await all('SELECT * FROM alarms ORDER BY occurred_at DESC', [], 'supervision');
+    const alarms = await all('SELECT * FROM alarms ORDER BY occurred_at DESC');
     res.json(alarms);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -282,9 +257,9 @@ app.put('/api/alarms/:id/acknowledge', async (req, res) => {
       UPDATE alarms 
       SET status = 'Acquittée', acknowledged_at = CURRENT_TIMESTAMP, acknowledged_by = ?
       WHERE id = ?
-    `, [req.body.operator_id || 'admin', req.params.id], 'supervision');
+    `, [req.body.operator_id || 'admin', req.params.id]);
     
-    const alarm = await get('SELECT * FROM alarms WHERE id = ?', [req.params.id], 'supervision');
+    const alarm = await get('SELECT * FROM alarms WHERE id = ?', [req.params.id]);
     res.json(alarm);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -310,7 +285,7 @@ app.get('/api/defauts', async (req, res) => {
     }
 
     query += ' ORDER BY id_defaut';
-    const defauts = await all(query, params, 'malaxeur_db');
+    const defauts = await all(query, params);
     res.json(defauts);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -320,7 +295,7 @@ app.get('/api/defauts', async (req, res) => {
 // GET /api/defauts/:id - Détails d'un défaut
 app.get('/api/defauts/:id', async (req, res) => {
   try {
-    const defaut = await get('SELECT * FROM defauts_catalogue WHERE id_defaut = ?', [req.params.id], 'malaxeur_db');
+    const defaut = await get('SELECT * FROM defauts_catalogue WHERE id_defaut = ?', [req.params.id]);
     if (!defaut) {
       return res.status(404).json({ error: 'Défaut non trouvé' });
     }
@@ -345,7 +320,7 @@ app.get('/api/etapes-execution', async (req, res) => {
     }
 
     query += ' ORDER BY numero_etape';
-    const etapes = await all(query, params, 'supervision');
+    const etapes = await all(query, params);
     res.json(etapes);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -357,13 +332,13 @@ app.post('/api/etapes-execution', async (req, res) => {
   try {
     const { cycle_id, etape_recette_id, numero_etape, date_debut, statut } = req.body;
     
-    const result = await run(`
+    await run(`
       INSERT INTO etapes_execution 
       (cycle_id, etape_recette_id, numero_etape, date_debut, statut)
       VALUES (?, ?, ?, ?, ?)
-    `, [cycle_id, etape_recette_id, numero_etape, date_debut || new Date().toISOString().slice(0, 19).replace('T', ' '), statut || 'EN_COURS'], 'supervision');
+    `, [cycle_id, etape_recette_id, numero_etape, date_debut || new Date().toISOString(), statut || 'EN_COURS']);
     
-    const etape = await get('SELECT * FROM etapes_execution WHERE id = ?', [result.id], 'supervision');
+    const etape = await get('SELECT * FROM etapes_execution WHERE id = last_insert_rowid()');
     res.status(201).json(etape);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -385,9 +360,9 @@ app.put('/api/etapes-execution/:id', async (req, res) => {
           statut = COALESCE(?, statut),
           commentaire = COALESCE(?, commentaire)
       WHERE id = ?
-    `, [date_fin, duree_reelle_sec, quantite_dosee, consigne_atteinte, valeur_critere, statut, commentaire, req.params.id], 'supervision');
+    `, [date_fin, duree_reelle_sec, quantite_dosee, consigne_atteinte, valeur_critere, statut, commentaire, req.params.id]);
     
-    const etape = await get('SELECT * FROM etapes_execution WHERE id = ?', [req.params.id], 'supervision');
+    const etape = await get('SELECT * FROM etapes_execution WHERE id = ?', [req.params.id]);
     res.json(etape);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -400,36 +375,37 @@ app.put('/api/etapes-execution/:id', async (req, res) => {
 app.post('/api/mixers/:id/start-recipe', async (req, res) => {
   try {
     const { recipe_id, operator_id, batch_number } = req.body;
+    const batchId = uuidv4();
     
-    // Récupérer la recette pour obtenir le nom
-    const recipe = await get('SELECT * FROM recettes WHERE id = ?', [recipe_id], 'supervision');
+    // Récupérer la recette pour obtenir le nom et la description
+    const recipe = await get('SELECT * FROM recipes WHERE id = ?', [recipe_id]);
     
-    // Déterminer le nom du malaxeur depuis le mixer
-    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
-    const malaxeurEnum = mixer.name.includes('B1') ? 'B1' : 
-                         mixer.name.includes('B2') ? 'B2' :
-                         mixer.name.includes('B3') ? 'B3' :
-                         mixer.name.includes('B5') ? 'B5' :
-                         mixer.name.includes('B6') ? 'B6' : 'B7';
-    
-    // Créer un nouveau cycle de production
-    const result = await run(`
-      INSERT INTO cycles_production (
-        recette_id, malaxeur, date_debut, statut, operateur, code_formule
+    // Créer un nouveau lot avec les champs de production
+    await run(`
+      INSERT INTO batches (
+        id, batch_number, mixer_id, recipe_id, started_at, status, operator_id,
+        formule, designation, fabricant
       )
-      VALUES (?, ?, CURRENT_TIMESTAMP, 'EN_COURS', ?, ?)
-    `, [recipe_id, malaxeurEnum, operator_id || '', recipe?.nom || ''], 'supervision');
-    
-    const cycleId = result.id;
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'En cours', ?, ?, ?, ?)
+    `, [
+      batchId, 
+      batch_number || `BATCH-${Date.now()}`, 
+      req.params.id, 
+      recipe_id, 
+      operator_id || '',
+      recipe?.name || '', // Formule = nom de la recette
+      recipe?.description || '', // Désignation = description de la recette
+      operator_id || '' // Fabricant = opérateur
+    ]);
     
     // Créer l'étape d'exécution pour la première étape
-    const firstStep = await get('SELECT * FROM etapes_recette WHERE recette_id = ? AND numero_etape = 1', [recipe_id], 'supervision');
+    const firstStep = await get('SELECT * FROM recipe_steps WHERE recipe_id = ? AND step_number = 1', [recipe_id]);
     if (firstStep) {
       await run(`
         INSERT INTO etapes_execution 
         (cycle_id, etape_recette_id, numero_etape, date_debut, statut)
         VALUES (?, ?, 1, CURRENT_TIMESTAMP, 'EN_COURS')
-      `, [cycleId, firstStep.id], 'supervision');
+      `, [batchId, firstStep.id]);
     }
     
     // Créer les entrées de distribution par défaut
@@ -438,7 +414,7 @@ app.post('/api/mixers/:id/start-recipe', async (req, res) => {
       await run(`
         INSERT INTO batch_distribution (batch_id, product_name, qte_formule, qte_dosee, dose)
         VALUES (?, ?, 0, 0, 0)
-      `, [cycleId, productName], 'supervision');
+      `, [batchId, productName]);
     }
     
     // Mettre à jour le malaxeur
@@ -446,10 +422,10 @@ app.post('/api/mixers/:id/start-recipe', async (req, res) => {
       UPDATE mixers 
       SET recipe_id = ?, status = 'Production', current_step = 1, progress = 0, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [recipe_id, req.params.id], 'supervision');
+    `, [recipe_id, req.params.id]);
     
-    const updatedMixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
-    res.json({ mixer: updatedMixer, batch_id: cycleId });
+    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
+    res.json({ mixer, batch_id: batchId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -458,25 +434,19 @@ app.post('/api/mixers/:id/start-recipe', async (req, res) => {
 // POST /api/mixers/:id/end-recipe - Terminer une recette
 app.post('/api/mixers/:id/end-recipe', async (req, res) => {
   try {
-    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
+    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     if (!mixer) {
       return res.status(404).json({ error: 'Malaxeur non trouvé' });
     }
     
-    // Trouver le cycle en cours pour ce malaxeur
-    const malaxeurEnum = mixer.name.includes('B1') ? 'B1' : 
-                         mixer.name.includes('B2') ? 'B2' :
-                         mixer.name.includes('B3') ? 'B3' :
-                         mixer.name.includes('B5') ? 'B5' :
-                         mixer.name.includes('B6') ? 'B6' : 'B7';
-    
-    const cycle = await get('SELECT * FROM cycles_production WHERE malaxeur = ? AND statut = ? ORDER BY date_debut DESC LIMIT 1', [malaxeurEnum, 'EN_COURS'], 'supervision');
-    if (cycle) {
+    // Mettre à jour le lot en cours
+    const batch = await get('SELECT * FROM batches WHERE mixer_id = ? AND status = ? ORDER BY started_at DESC LIMIT 1', [req.params.id, 'En cours']);
+    if (batch) {
       await run(`
-        UPDATE cycles_production 
-        SET date_fin = CURRENT_TIMESTAMP, statut = 'TERMINE'
+        UPDATE batches 
+        SET completed_at = CURRENT_TIMESTAMP, status = 'Terminé'
         WHERE id = ?
-      `, [cycle.id], 'supervision');
+      `, [batch.id]);
     }
     
     // Réinitialiser le malaxeur
@@ -484,9 +454,9 @@ app.post('/api/mixers/:id/end-recipe', async (req, res) => {
       UPDATE mixers 
       SET recipe_id = NULL, status = 'Arrêt', current_step = NULL, progress = 0, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [req.params.id], 'supervision');
+    `, [req.params.id]);
     
-    const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
+    const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -497,40 +467,39 @@ app.post('/api/mixers/:id/end-recipe', async (req, res) => {
 app.post('/api/mixers/:id/validate-step', async (req, res) => {
   try {
     const { step_number, quantite_dosee, consigne_atteinte, valeur_critere, commentaire } = req.body;
-    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
+    const mixer = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     
     if (!mixer) {
       return res.status(404).json({ error: 'Malaxeur non trouvé' });
     }
     
-    // Trouver le cycle en cours
-    const malaxeurEnum = mixer.name.includes('B1') ? 'B1' : 
-                         mixer.name.includes('B2') ? 'B2' :
-                         mixer.name.includes('B3') ? 'B3' :
-                         mixer.name.includes('B5') ? 'B5' :
-                         mixer.name.includes('B6') ? 'B6' : 'B7';
+    // Récupérer le batch en cours
+    const batch = await get('SELECT * FROM batches WHERE mixer_id = ? AND status = ? ORDER BY started_at DESC LIMIT 1', [req.params.id, 'En cours']);
     
-    const cycle = await get('SELECT * FROM cycles_production WHERE malaxeur = ? AND statut = ? ORDER BY date_debut DESC LIMIT 1', [malaxeurEnum, 'EN_COURS'], 'supervision');
-    
-    if (cycle && step_number) {
-      const recipeStep = await get('SELECT * FROM etapes_recette WHERE recette_id = ? AND numero_etape = ?', [mixer.recipe_id, step_number], 'supervision');
+    if (batch && step_number) {
+      // Récupérer l'étape de recette actuelle
+      const recipeStep = await get('SELECT * FROM recipe_steps WHERE recipe_id = ? AND step_number = ?', [mixer.recipe_id, step_number]);
       
       if (recipeStep) {
-        let etapeExec = await get('SELECT * FROM etapes_execution WHERE cycle_id = ? AND numero_etape = ?', [cycle.id, step_number], 'supervision');
+        // Trouver ou créer l'étape d'exécution
+        let etapeExec = await get('SELECT * FROM etapes_execution WHERE cycle_id = ? AND numero_etape = ?', [batch.id, step_number]);
         
         if (!etapeExec) {
+          // Créer l'étape d'exécution
           await run(`
             INSERT INTO etapes_execution 
             (cycle_id, etape_recette_id, numero_etape, date_debut, statut)
             VALUES (?, ?, ?, CURRENT_TIMESTAMP, 'EN_COURS')
-          `, [cycle.id, recipeStep.id, step_number], 'supervision');
-          etapeExec = await get('SELECT * FROM etapes_execution WHERE cycle_id = ? AND numero_etape = ?', [cycle.id, step_number], 'supervision');
+          `, [batch.id, recipeStep.id, step_number]);
+          etapeExec = await get('SELECT * FROM etapes_execution WHERE cycle_id = ? AND numero_etape = ?', [batch.id, step_number]);
         }
         
+        // Calculer la durée réelle
         const dateDebut = new Date(etapeExec.date_debut);
         const now = new Date();
         const dureeReelleSec = Math.floor((now.getTime() - dateDebut.getTime()) / 1000);
         
+        // Mettre à jour l'étape d'exécution
         if (etapeExec && etapeExec.id) {
           await run(`
             UPDATE etapes_execution 
@@ -542,40 +511,43 @@ app.post('/api/mixers/:id/validate-step', async (req, res) => {
                 commentaire = COALESCE(?, commentaire),
                 statut = 'TERMINE'
             WHERE id = ?
-          `, [dureeReelleSec, quantite_dosee, consigne_atteinte ? 1 : 0, valeur_critere, commentaire, etapeExec.id], 'supervision');
+          `, [dureeReelleSec, quantite_dosee, consigne_atteinte ? 1 : 0, valeur_critere, commentaire, etapeExec.id]);
         }
       }
     }
     
     const nextStep = (mixer.current_step || 0) + 1;
-    const totalSteps = mixer.recipe_id ? await get('SELECT COUNT(*) as count FROM etapes_recette WHERE recette_id = ?', [mixer.recipe_id], 'supervision') : null;
+    const totalSteps = mixer.recipe_id ? await get('SELECT COUNT(*) as count FROM recipe_steps WHERE recipe_id = ?', [mixer.recipe_id]) : null;
     const progress = totalSteps ? Math.round((nextStep / totalSteps.count) * 100) : 100;
     
+    // Si c'est la dernière étape, terminer le batch
     if (totalSteps && nextStep > totalSteps.count) {
-      if (cycle) {
-        await run(`UPDATE cycles_production SET date_fin = CURRENT_TIMESTAMP, statut = 'TERMINE' WHERE id = ?`, [cycle.id], 'supervision');
+      if (batch) {
+        await run(`UPDATE batches SET completed_at = CURRENT_TIMESTAMP, status = 'Terminé' WHERE id = ?`, [batch.id]);
       }
-      await run(`UPDATE mixers SET recipe_id = NULL, status = 'Arrêt', current_step = NULL, progress = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [req.params.id], 'supervision');
+      await run(`UPDATE mixers SET recipe_id = NULL, status = 'Arrêt', current_step = NULL, progress = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [req.params.id]);
     } else {
+      // Mettre à jour le malaxeur pour la prochaine étape
       await run(`
         UPDATE mixers 
         SET current_step = ?, progress = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `, [nextStep, progress, req.params.id], 'supervision');
+      `, [nextStep, progress, req.params.id]);
       
-      if (cycle && mixer.recipe_id && nextStep <= totalSteps.count) {
-        const nextRecipeStep = await get('SELECT * FROM etapes_recette WHERE recette_id = ? AND numero_etape = ?', [mixer.recipe_id, nextStep], 'supervision');
+      // Créer l'étape d'exécution pour la prochaine étape
+      if (batch && mixer.recipe_id && nextStep <= totalSteps.count) {
+        const nextRecipeStep = await get('SELECT * FROM recipe_steps WHERE recipe_id = ? AND step_number = ?', [mixer.recipe_id, nextStep]);
         if (nextRecipeStep) {
           await run(`
             INSERT INTO etapes_execution 
             (cycle_id, etape_recette_id, numero_etape, date_debut, statut)
             VALUES (?, ?, ?, CURRENT_TIMESTAMP, 'EN_COURS')
-          `, [cycle.id, nextRecipeStep.id, nextStep], 'supervision');
+          `, [batch.id, nextRecipeStep.id, nextStep]);
         }
       }
     }
     
-    const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id], 'supervision');
+    const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -584,24 +556,20 @@ app.post('/api/mixers/:id/validate-step', async (req, res) => {
 
 // ========== BATCHES API ==========
 
-// GET /api/batches - Liste tous les lots (cycles de production)
+// GET /api/batches - Liste tous les lots (avec distribution)
 app.get('/api/batches', async (req, res) => {
   try {
     const batches = await all(`
-      SELECT c.*, r.nom as recipe_name
-      FROM cycles_production c
-      LEFT JOIN recettes r ON c.recette_id = r.id
-      ORDER BY c.date_debut DESC
+      SELECT b.*, r.name as recipe_name
+      FROM batches b
+      LEFT JOIN recipes r ON b.recipe_id = r.id
+      ORDER BY b.started_at DESC
       LIMIT 100
-    `, [], 'supervision');
+    `);
     
-    // Pour chaque batch, récupérer la distribution si la table existe
+    // Pour chaque batch, récupérer la distribution
     for (const batch of batches) {
-      try {
-        batch.distribution = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [batch.id], 'supervision');
-      } catch (e) {
-        batch.distribution = [];
-      }
+      batch.distribution = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [batch.id]);
     }
     
     res.json(batches);
@@ -613,20 +581,14 @@ app.get('/api/batches', async (req, res) => {
 // GET /api/batches/:id - Détails d'un lot
 app.get('/api/batches/:id', async (req, res) => {
   try {
-    const batch = await get('SELECT * FROM cycles_production WHERE id = ?', [req.params.id], 'supervision');
+    const batch = await get('SELECT * FROM batches WHERE id = ?', [req.params.id]);
     if (!batch) {
       return res.status(404).json({ error: 'Lot non trouvé' });
     }
     
-    // Récupérer les étapes d'exécution
-    batch.steps = await all('SELECT * FROM etapes_execution WHERE cycle_id = ? ORDER BY numero_etape', [batch.id], 'supervision');
-    
-    // Récupérer la distribution
-    try {
-      batch.distribution = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [batch.id], 'supervision');
-    } catch (e) {
-      batch.distribution = [];
-    }
+    batch.steps = await all('SELECT * FROM batch_steps WHERE batch_id = ? ORDER BY step_number', [batch.id]);
+    batch.metrics = await all('SELECT * FROM batch_metrics WHERE batch_id = ? ORDER BY timestamp', [batch.id]);
+    batch.distribution = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [batch.id]);
     
     res.json(batch);
   } catch (error) {
@@ -640,23 +602,18 @@ app.put('/api/batches/:id/distribution', async (req, res) => {
     const { distribution } = req.body;
     
     // Supprimer l'ancienne distribution
-    await run('DELETE FROM batch_distribution WHERE batch_id = ?', [req.params.id], 'supervision');
+    await run('DELETE FROM batch_distribution WHERE batch_id = ?', [req.params.id]);
     
     // Insérer la nouvelle distribution
     for (const item of distribution || []) {
       await run(`
-        INSERT INTO batch_distribution 
+        INSERT OR REPLACE INTO batch_distribution 
         (batch_id, product_name, qte_formule, qte_dosee, dose, updated_at)
         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON DUPLICATE KEY UPDATE
-          qte_formule = VALUES(qte_formule),
-          qte_dosee = VALUES(qte_dosee),
-          dose = VALUES(dose),
-          updated_at = CURRENT_TIMESTAMP
-      `, [req.params.id, item.productName, item.qteFormule || 0, item.qteDosee || 0, item.dose || 0], 'supervision');
+      `, [req.params.id, item.productName, item.qteFormule || 0, item.qteDosee || 0, item.dose || 0]);
     }
     
-    const updated = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [req.params.id], 'supervision');
+    const updated = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [req.params.id]);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -684,6 +641,7 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Serveur API démarré sur http://localhost:${PORT}`);
-  console.log(`📊 Base de données: MySQL (supervision & malaxeur_db)`);
+  console.log(`📊 Base de données: database.sqlite`);
   console.log(`🌐 Testez l'API: http://localhost:${PORT}/api/mixers`);
 });
+

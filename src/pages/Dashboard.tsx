@@ -81,11 +81,25 @@ export default function Dashboard() {
   }
 
   const activeMixers = mixers.filter(m => m.status === 'Production').length;
-  const criticalAlarms = alarms.filter(a => a.level === 'Critique' && a.status === 'Active').length;
-  const criticalInventory = inventory.filter(i => i.status === 'Critique').length;
-  const lowInventory = inventory.filter(i => i.status === 'Bas').length;
-  const totalInventory = inventory.length;
-  const totalConsumption = inventory.reduce((sum, inv) => sum + (inv.maxCapacity - inv.currentQuantity), 0);
+  
+  // Calculer la consommation totale par produit
+  const getConsumptionByProduct = (productName: string) => {
+    // Pour l'instant, on calcule depuis les batches terminés/en cours
+    // On pourrait améliorer cela avec les transactions d'inventaire
+    const productBatches = batches.filter(b => {
+      const dist = b.distribution?.find(d => d.productName === productName);
+      return dist && dist.qteDosee > 0;
+    });
+    return productBatches.reduce((sum, b) => {
+      const dist = b.distribution?.find(d => d.productName === productName);
+      return sum + (dist?.qteDosee || 0);
+    }, 0);
+  };
+
+  const consumptionD10 = getConsumptionByProduct('Napvis D10');
+  const consumptionD200 = getConsumptionByProduct('Napvis D200');
+  const consumptionHuile = getConsumptionByProduct('Huile HM');
+  const consumptionPoudres = getConsumptionByProduct('Hydrocarb');
 
   return (
     <div className="space-y-6">
@@ -94,7 +108,7 @@ export default function Dashboard() {
       </div>
 
       {/* Statistiques globales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
@@ -108,41 +122,60 @@ export default function Dashboard() {
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Alarmes critiques</p>
-              <p className="text-2xl font-bold text-red-600">{criticalAlarms}</p>
+              <p className="text-sm text-gray-600">Alarmes actives</p>
+              <p className="text-2xl font-bold text-red-600">{alarms.filter(a => a.status === 'Active').length}</p>
             </div>
             <AlertTriangle className="w-8 h-8 text-red-600" />
           </div>
         </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Stocks critiques</p>
-              <p className="text-2xl font-bold text-red-600">{criticalInventory}</p>
-            </div>
-            <Package className="w-8 h-8 text-red-600" />
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Stocks bas</p>
-              <p className="text-2xl font-bold text-orange-600">{lowInventory}</p>
-            </div>
-            <Package className="w-8 h-8 text-orange-600" />
-          </div>
-        </div>
       </div>
 
-      {/* Statistiques stocks */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Carré alarmes sur toute la largeur */}
+      {alarms.filter(a => a.status === 'Active').length > 0 && (
+        <div className="card">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+            Alarmes actives
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {alarms.filter(a => a.status === 'Active').map((alarm) => (
+              <div
+                key={alarm.id}
+                className={`p-3 rounded-lg border ${
+                  alarm.level === 'Critique' ? 'bg-red-50 border-red-200' :
+                  alarm.level === 'Warning' ? 'bg-yellow-50 border-yellow-200' :
+                  'bg-blue-50 border-blue-200'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="font-semibold text-gray-900">{alarm.alarmCode}</div>
+                    <div className="text-sm text-gray-600 mt-1">{alarm.description}</div>
+                  </div>
+                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                    alarm.level === 'Critique' ? 'bg-red-100 text-red-800' :
+                    alarm.level === 'Warning' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-blue-100 text-blue-800'
+                  }`}>
+                    {alarm.level}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 mt-2">
+                  Malaxeur {alarm.mixerId} • {new Date(alarm.occurredAt).toLocaleString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Consommation par produit */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total produits en stock</p>
-              <p className="text-2xl font-bold text-gray-900">{totalInventory}</p>
+              <p className="text-sm text-gray-600">D10</p>
+              <p className="text-2xl font-bold text-gray-900">{consumptionD10.toFixed(2)} Kg</p>
             </div>
           </div>
         </div>
@@ -150,10 +183,26 @@ export default function Dashboard() {
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Consommation totale</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {totalConsumption.toFixed(0)} {inventory[0]?.unit || 'Kg'}
-              </p>
+              <p className="text-sm text-gray-600">D200</p>
+              <p className="text-2xl font-bold text-gray-900">{consumptionD200.toFixed(2)} Kg</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Huile minérale</p>
+              <p className="text-2xl font-bold text-gray-900">{consumptionHuile.toFixed(2)} Kg</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Poudres</p>
+              <p className="text-2xl font-bold text-gray-900">{consumptionPoudres.toFixed(2)} Kg</p>
             </div>
           </div>
         </div>
@@ -163,62 +212,89 @@ export default function Dashboard() {
       <div>
         <h2 className="text-xl font-semibold mb-4">Malaxeurs</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mixers.map((mixer) => (
-            <Link
-              key={mixer.id}
-              to={`/mixer/${mixer.id}`}
-              className="card hover:shadow-lg transition-shadow"
-            >
-              <MixerVisual mixer={mixer} size="small" />
-              <div className="mt-4 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">État</span>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                    mixer.status === 'Production' ? 'bg-green-100 text-green-800' :
-                    mixer.status === 'Pause' ? 'bg-yellow-100 text-yellow-800' :
-                    mixer.status === 'Alarme' ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {mixer.status}
-                  </span>
-                </div>
-                {mixer.recipe && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Recette</span>
-                      <span className="font-medium">{mixer.recipe.name}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">N° de lot</span>
-                      <span className="font-medium">{getCurrentBatchNumber(mixer.id)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Étape</span>
-                      <span className="font-medium">
-                        {mixer.currentStep || 0} / {mixer.recipe.steps?.length || 0}
-                      </span>
-                    </div>
-                    <div className="pt-2 border-t">
-                      <div className="flex justify-between text-sm text-gray-600 mb-1">
-                        <span>Progression</span>
-                        <span>{mixer.progress || 0}%</span>
+          {mixers.map((mixer) => {
+            const batch = batches.find(b => b.mixerId === mixer.id && (b.status === 'En cours' || b.status === 'Terminé'));
+            return (
+              <Link
+                key={mixer.id}
+                to={`/mixer/${mixer.id}`}
+                className="card hover:shadow-lg transition-shadow"
+              >
+                <MixerVisual mixer={mixer} size="small" />
+                <div className="mt-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">État</span>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      mixer.status === 'Production' ? 'bg-green-100 text-green-800' :
+                      mixer.status === 'Pause' ? 'bg-yellow-100 text-yellow-800' :
+                      mixer.status === 'Alarme' ? 'bg-red-100 text-red-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {mixer.status}
+                    </span>
+                  </div>
+                  {mixer.recipe && mixer.status === 'Production' && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Formule</span>
+                        <span className="font-medium">{batch?.formule || mixer.recipe.name}</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-primary-600 h-2 rounded-full transition-all"
-                          style={{ width: `${mixer.progress || 0}%` }}
-                        />
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">N° de lot</span>
+                        <span className="font-medium">{batch?.batchNumber || getCurrentBatchNumber(mixer.id)}</span>
                       </div>
-                    </div>
-                  </>
-                )}
-                <div className="flex justify-between text-sm pt-2 border-t">
-                  <span className="text-gray-600">Température</span>
-                  <span className="font-medium">{mixer.temperature.toFixed(1)}°C</span>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Fabricant</span>
+                        <span className="font-medium">{batch?.fabricant || batch?.operatorId || '-'}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Heure de début</span>
+                        <span className="font-medium">
+                          {batch?.startedAt ? new Date(batch.startedAt).toLocaleTimeString() : '-'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-2 border-t">
+                        <span className="text-gray-600">Étape</span>
+                        <span className="font-medium">
+                          {mixer.currentStep || 0} / {mixer.recipe.steps?.length || 0}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t">
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                          <span>Progression</span>
+                          <span>{mixer.progress || 0}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-primary-600 h-2 rounded-full transition-all"
+                            style={{ width: `${mixer.progress || 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {mixer.recipe && mixer.status !== 'Production' && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Recette</span>
+                        <span className="font-medium">{mixer.recipe.name}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">N° de lot</span>
+                        <span className="font-medium">{getCurrentBatchNumber(mixer.id)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Étape</span>
+                        <span className="font-medium">
+                          {mixer.currentStep || 0} / {mixer.recipe.steps?.length || 0}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>

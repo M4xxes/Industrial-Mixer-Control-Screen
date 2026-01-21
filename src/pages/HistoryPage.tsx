@@ -100,7 +100,7 @@ export default function HistoryPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Historique des Cycles</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Historique des Recettes</h1>
         <button onClick={handleExport} className="btn-primary">
           <Download className="w-4 h-4 inline mr-2" />
           Exporter en CSV
@@ -186,7 +186,7 @@ export default function HistoryPage() {
       {/* Liste des cycles */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">
-          Cycles de production ({filteredBatches.length})
+          Recettes de production ({filteredBatches.length})
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -207,7 +207,7 @@ export default function HistoryPage() {
               {filteredBatches.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="p-4 text-center text-gray-500">
-                    Aucun cycle trouvé
+                    Aucune recette trouvée
                   </td>
                 </tr>
               ) : (

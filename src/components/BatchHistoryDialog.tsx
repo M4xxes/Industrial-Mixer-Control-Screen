@@ -9,7 +9,7 @@ interface BatchHistoryDialogProps {
 }
 
 export default function BatchHistoryDialog({ batchId, onClose }: BatchHistoryDialogProps) {
-  const [activeTab, setActiveTab] = useState<'steps' | 'charts'>('steps');
+  // const [activeTab, setActiveTab] = useState<'steps' | 'charts'>('steps'); // Graphiques masqués
 
   // Données simulées
   const batch: Batch = {
@@ -86,29 +86,24 @@ export default function BatchHistoryDialog({ batchId, onClose }: BatchHistoryDia
 
         <div className="p-6 space-y-6">
           {/* Résumé des performances */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="card">
-              <div className="text-sm text-gray-600">Température moyenne</div>
-              <div className="text-2xl font-bold">{avgTemperature.toFixed(1)}°C</div>
-              <div className="text-sm text-gray-500">Max: {maxTemperature.toFixed(1)}°C</div>
+              <div className="text-sm text-gray-600">Poids total prévu</div>
+              <div className="text-2xl font-bold">{totalPlannedWeight.toFixed(2)} Kg</div>
             </div>
             <div className="card">
-              <div className="text-sm text-gray-600">Vitesse moyenne</div>
-              <div className="text-2xl font-bold">{avgSpeed.toFixed(1)} tr/min</div>
+              <div className="text-sm text-gray-600">Poids total dosé</div>
+              <div className="text-2xl font-bold">{totalActualWeight.toFixed(2)} Kg</div>
             </div>
             <div className="card">
-              <div className="text-sm text-gray-600">Puissance moyenne</div>
-              <div className="text-2xl font-bold">{avgPower.toFixed(1)} kW</div>
-            </div>
-            <div className="card">
-              <div className="text-sm text-gray-600">Durée</div>
+              <div className="text-sm text-gray-600">Durée réelle</div>
               <div className="text-2xl font-bold">{(actualDuration / 60).toFixed(0)} min</div>
-              <div className="text-sm text-gray-500">Prévu: {(plannedDuration / 60).toFixed(0)} min</div>
+              <div className="text-sm text-gray-500">Durée prévue: {(plannedDuration / 60).toFixed(0)} min</div>
             </div>
           </div>
 
-          {/* Onglets */}
-          <div className="border-b">
+          {/* Onglets - Graphiques masqués pour l'instant */}
+          {/* <div className="border-b">
             <nav className="flex space-x-8">
               <button
                 onClick={() => setActiveTab('steps')}
@@ -120,20 +115,11 @@ export default function BatchHistoryDialog({ batchId, onClose }: BatchHistoryDia
               >
                 Étapes exécutées
               </button>
-              <button
-                onClick={() => setActiveTab('charts')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'charts'
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Graphiques
-              </button>
             </nav>
-          </div>
+          </div> */}
 
-          {activeTab === 'steps' && (
+          {/* {activeTab === 'steps' && ( */}
+          <div>
             <div className="space-y-4">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -194,51 +180,15 @@ export default function BatchHistoryDialog({ batchId, onClose }: BatchHistoryDia
                 </div>
               </div>
             </div>
-          )}
+          </div>
+          {/* )} */}
 
-          {activeTab === 'charts' && batch.metrics && (
+          {/* Graphiques masqués pour l'instant */}
+          {/* {activeTab === 'charts' && batch.metrics && (
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Température réelle vs cible</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={batch.metrics}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="timestamp" tickFormatter={(v) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} />
-                    <YAxis />
-                    <Tooltip labelFormatter={(v) => new Date(v).toLocaleString('fr-FR')} />
-                    <Legend />
-                    <Line type="monotone" dataKey="temperature" stroke="#ef4444" name="Température (°C)" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Vitesse réelle vs cible</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={batch.metrics}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="timestamp" tickFormatter={(v) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} />
-                    <YAxis />
-                    <Tooltip labelFormatter={(v) => new Date(v).toLocaleString('fr-FR')} />
-                    <Legend />
-                    <Line type="monotone" dataKey="speed" stroke="#3b82f6" name="Vitesse (tr/min)" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Puissance consommée</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={batch.metrics}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="timestamp" tickFormatter={(v) => new Date(v).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} />
-                    <YAxis />
-                    <Tooltip labelFormatter={(v) => new Date(v).toLocaleString('fr-FR')} />
-                    <Legend />
-                    <Line type="monotone" dataKey="power" stroke="#10b981" name="Puissance (kW)" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              ... graphiques masqués ...
             </div>
-          )}
+          )} */}
         </div>
       </div>
     </div>

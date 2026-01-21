@@ -16,6 +16,17 @@ export type RecipeFunction =
   | 'Mise au vide' 
   | 'Extrusion';
 
+export interface Ingredient {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  unit: 'Kg' | 'L' | 'g';
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Recipe {
   id: string;
   name: string;
@@ -24,6 +35,9 @@ export interface Recipe {
   createdAt: string;
   updatedAt: string;
   isActive: boolean;
+  mixerId?: number;
+  mixerName?: string;
+  createdBy?: string;
 }
 
 export interface RecipeStep {

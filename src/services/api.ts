@@ -140,3 +140,43 @@ export const etapesExecutionAPI = {
   }),
 };
 
+// ========== INGREDIENTS API ==========
+
+export const ingredientsAPI = {
+  getAll: () => fetchAPI('/ingredients'),
+  getById: (id: string) => fetchAPI(`/ingredients/${id}`),
+  create: (data: { name: string; description?: string; category?: string; unit: string }) => fetchAPI('/ingredients', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: string, data: any) => fetchAPI(`/ingredients/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: string) => fetchAPI(`/ingredients/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
+// ========== USERS API ==========
+
+export const usersAPI = {
+  getAll: () => fetchAPI('/users'),
+  getById: (id: string) => fetchAPI(`/users/${id}`),
+  create: (data: { username: string; email: string; password: string; role: string }) => fetchAPI('/users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: string, data: any) => fetchAPI(`/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: string) => fetchAPI(`/users/${id}`, {
+    method: 'DELETE',
+  }),
+  changePassword: (id: string, password: string) => fetchAPI(`/users/${id}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password }),
+  }),
+};
+

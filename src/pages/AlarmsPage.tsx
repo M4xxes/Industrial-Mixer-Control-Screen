@@ -12,6 +12,8 @@ export default function AlarmsPage() {
     level: 'all',
     status: 'all',
     period: '',
+    dateFrom: '',
+    dateTo: '',
   });
 
   useEffect(() => {
@@ -88,6 +90,19 @@ export default function AlarmsPage() {
       const periodDays = parseInt(filters.period);
       const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
       if (alarmDate < periodStart) return false;
+    }
+    // Filtre par date (comme dans historique)
+    if (filters.dateFrom) {
+      const alarmDate = new Date(alarm.occurredAt);
+      const fromDate = new Date(filters.dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      if (alarmDate < fromDate) return false;
+    }
+    if (filters.dateTo) {
+      const alarmDate = new Date(alarm.occurredAt);
+      const toDate = new Date(filters.dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      if (alarmDate > toDate) return false;
     }
     return true;
   });
@@ -208,6 +223,28 @@ export default function AlarmsPage() {
               <option value="168">7 derniers jours</option>
               <option value="720">30 derniers jours</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date début
+            </label>
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              className="w-full border rounded-md px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date fin
+            </label>
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              className="w-full border rounded-md px-3 py-2"
+            />
           </div>
         </div>
       </div>

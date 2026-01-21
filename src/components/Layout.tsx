@@ -1,3 +1,4 @@
+
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,16 +33,16 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/', label: 'Vue d\'ensemble', icon: LayoutDashboard, roles: ['Admin'] },
     { path: '/recipes', label: 'Recettes', icon: BookOpen, roles: ['Admin'] },
     { path: '/manual', label: 'Mode Manuel', icon: Hand, roles: ['Admin'] },
-    { path: '/inventory', label: 'Stocks', icon: Package, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
+    // { path: '/inventory', label: 'Stocks', icon: Package, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] }, // Masqué temporairement
     { path: '/alarms', label: 'Alarmes', icon: AlertTriangle, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
     { path: '/history', label: 'Historique', icon: History, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
     { path: '/maintenance', label: 'Maintenance', icon: Settings, roles: ['Admin'] },
   ];
 
   const productionItems: Array<{ path: string; label: string; roles: UserRole[] }> = [
-    { path: '/production/B1-2', label: 'Production B1/2', roles: ['Admin', 'B1/2'] },
-    { path: '/production/B3-5', label: 'Production B3/5', roles: ['Admin', 'B3/5'] },
-    { path: '/production/B6-7', label: 'Production B6/7', roles: ['Admin', 'B6/7'] },
+    { path: '/production/B1-2', label: 'Production BUTYL1/2', roles: ['Admin', 'B1/2'] },
+    { path: '/production/B3-5', label: 'Production BUTYL3/5', roles: ['Admin', 'B3/5'] },
+    { path: '/production/B6-7', label: 'Production BUTYL6/7', roles: ['Admin', 'B6/7'] },
   ];
 
   const visibleNavItems = navItems.filter(item => hasAccess(item.roles));

@@ -272,12 +272,12 @@ async function insertInitialData() {
 
   // Insérer les 6 malaxeurs
   const mixers = [
-    { id: 1, name: 'Malaxeur B1', status: 'Marche', motor_arm: 'Marche', motor_screw: 'Marche' },
-    { id: 2, name: 'Malaxeur B2', status: 'Marche', motor_arm: 'Marche', motor_screw: 'Marche' },
+    { id: 1, name: 'Malaxeur B1', status: 'Production', motor_arm: 'Marche', motor_screw: 'Marche' },
+    { id: 2, name: 'Malaxeur B2', status: 'Production', motor_arm: 'Marche', motor_screw: 'Marche' },
     { id: 3, name: 'Malaxeur B3', status: 'Arrêt', motor_arm: 'Arrêt', motor_screw: 'Arrêt' },
-    { id: 4, name: 'Malaxeur B5', status: 'Marche', motor_arm: 'Marche', motor_screw: 'Marche' },
-    { id: 5, name: 'Malaxeur B6', status: 'Erreur', motor_arm: 'Défaut', motor_screw: 'Arrêt' },
-    { id: 6, name: 'Malaxeur B7', status: 'Maintenance', motor_arm: 'Maintenance', motor_screw: 'Maintenance' },
+    { id: 4, name: 'Malaxeur B5', status: 'Production', motor_arm: 'Marche', motor_screw: 'Marche' },
+    { id: 5, name: 'Malaxeur B6', status: 'Alarme', motor_arm: 'Défaut', motor_screw: 'Arrêt' },
+    { id: 6, name: 'Malaxeur B7', status: 'Pause', motor_arm: 'Maintenance', motor_screw: 'Maintenance' },
   ];
 
   for (const mixer of mixers) {
