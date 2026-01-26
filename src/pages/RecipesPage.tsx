@@ -46,7 +46,8 @@ export default function RecipesPage() {
       try {
         setLoading(true);
         const data = await recipesAPI.getAll();
-        console.log('Recettes reçues de l\'API:', data.length, data.map((r: any) => r.name));
+        // Logs désactivés pour éviter le spam console
+        // console.log('Recettes reçues de l\'API:', data.length, data.map((r: any) => r.name));
         // Transformer les données de l'API pour correspondre au type Recipe
         const transformedRecipes: Recipe[] = data.map((r: any) => ({
           id: r.id,
@@ -85,7 +86,8 @@ export default function RecipesPage() {
         });
         
         const uniqueRecipes = Array.from(uniqueRecipesMap.values());
-        console.log('Recettes uniques après filtrage:', uniqueRecipes.length, uniqueRecipes.map(r => r.name));
+        // Logs désactivés pour éviter le spam console
+        // console.log('Recettes uniques après filtrage:', uniqueRecipes.length, uniqueRecipes.map(r => r.name));
         setRecipes(uniqueRecipes);
       } catch (error) {
         console.error('Error fetching recipes:', error);
@@ -113,8 +115,11 @@ export default function RecipesPage() {
       }));
       setIngredients(transformedIngredients);
     } catch (error) {
-      console.error('Error fetching ingredients:', error);
-      // Si l'API n'existe pas encore, utiliser des données par défaut
+      // Ne pas logger les erreurs 404 pour ingredients (API n'existe pas encore)
+      // Utiliser des données par défaut silencieusement
+      if (!(error instanceof Error && (error.message?.includes('404') || error.message?.includes('Not Found')))) {
+        console.error('Error fetching ingredients:', error);
+      }
       setIngredients([
         { id: '1', name: 'Napvis D10', description: 'Napvis D10', category: 'Liquide', unit: 'Kg', isActive: true },
         { id: '2', name: 'Napvis D200', description: 'Napvis D200', category: 'Liquide', unit: 'Kg', isActive: true },

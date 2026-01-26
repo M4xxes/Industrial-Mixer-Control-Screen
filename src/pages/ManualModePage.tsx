@@ -38,8 +38,9 @@ export default function ManualModePage() {
       }
     };
     fetchBatches();
-    const interval = setInterval(fetchBatches, 2000);
-    return () => clearInterval(interval);
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchBatches, 2000);
+    // return () => clearInterval(interval);
   }, []);
 
   // Rediriger si pas admin (APRÈS les hooks)

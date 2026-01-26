@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMixers } from '../hooks/useMixers';
 import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI } from '../services/api';
 import { Recipe, Alarm, Batch, EtapesExecution } from '../types';
-import { Play, Square, Check, AlertTriangle, Package, ArrowRightLeft, Warehouse, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
+import { Play, Square, Check, AlertTriangle } from 'lucide-react';
 
 export default function ProductionPage() {
   const { pair } = useParams<{ pair: string }>();
@@ -16,40 +16,61 @@ export default function ProductionPage() {
   const [selectedRecipeId, setSelectedRecipeId] = useState<{ [key: number]: string }>({});
   const [batchNumbers, setBatchNumbers] = useState<{ [key: number]: string }>({});
   const [batchNumberInput, setBatchNumberInput] = useState<{ [key: number]: string }>({});
-  const [activeTab, setActiveTab] = useState<'production' | 'transfert' | 'stockage'>('production');
+  const [activeTab, setActiveTab] = useState<'production'>('production');
   const [showLoading, setShowLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const fetchingRef = useRef(false); // Pour éviter les requêtes multiples simultanées
   
-  // États pour le transfert de poudre
-  const [transferStatus, setTransferStatus] = useState<{ [key: string]: 'actif' | 'arrêt' | 'erreur' }>({
-    'Silo Principal': 'arrêt',
-    'Convoyeur B1-B2': 'arrêt',
-    'Convoyeur B3-B5': 'arrêt',
-    'Convoyeur B6-B7': 'arrêt',
-  });
-  
-  // États pour le stockage
-  const [storageData] = useState([
-    { id: 1, name: 'Silo Poudre A', currentLevel: 75, maxCapacity: 100, unit: '%', status: 'Normal' as 'Normal' | 'Bas' | 'Critique' },
-    { id: 2, name: 'Silo Poudre B', currentLevel: 45, maxCapacity: 100, unit: '%', status: 'Normal' },
-    { id: 3, name: 'Réservoir D10', currentLevel: 20, maxCapacity: 100, unit: '%', status: 'Bas' },
-    { id: 4, name: 'Réservoir D200', currentLevel: 85, maxCapacity: 100, unit: '%', status: 'Normal' },
-    { id: 5, name: 'Réservoir Huile', currentLevel: 10, maxCapacity: 100, unit: '%', status: 'Critique' },
-  ]);
 
-  // Déterminer les IDs des malaxeurs selon la paire
-  const getMixerIds = () => {
+  // Déterminer les IDs des malaxeurs selon la paire (mémorisé pour éviter les re-renders)
+  const mixerIds = useMemo(() => {
     if (!pair) return [];
     switch (pair) {
       case 'B1-2': return [1, 2];
-      case 'B3-5': return [3, 5];
-      case 'B6-7': return [6, 7];
+      case 'B3-5': return [3, 5]; // B3 et B5 seulement (pas B4, pas B6)
+      case 'B6-7': return [6, 7]; // B6 et B7
       default: return [];
     }
-  };
+  }, [pair]);
 
-  const mixerIds = getMixerIds();
-  const displayedMixers = mixers.filter(m => m && mixerIds.includes(m.id));
+  const displayedMixers = useMemo(() => {
+    // Filtrer par ID ET par nom pour éviter les problèmes de base de données
+    // Exemple: si B6 a l'ID 5 dans la base, il ne doit pas apparaître dans B3-5
+    const filtered = mixers.filter(m => {
+      if (!m) return false;
+      
+      // Extraire le numéro du malaxeur depuis le nom (ex: "Malaxeur B6" -> "6")
+      const mixerNumber = m.name.match(/B(\d+)/)?.[1];
+      
+      if (mixerNumber) {
+        const mixerNum = parseInt(mixerNumber, 10);
+        // Vérifier que le numéro dans le nom correspond à un ID attendu
+        if (mixerIds.includes(mixerNum)) {
+          // Vérifier aussi que l'ID correspond (double vérification)
+          // Si l'ID ne correspond pas mais le nom oui, on l'inclut quand même
+          // (pour gérer les cas où la base de données a des IDs incorrects)
+          return true;
+        }
+        // Si le numéro dans le nom ne correspond pas, exclure même si l'ID correspond
+        // (ex: B6 avec ID 5 ne doit pas apparaître dans B3-5)
+        return false;
+      }
+      
+      // Si pas de numéro dans le nom, utiliser seulement l'ID (comportement par défaut)
+      return mixerIds.includes(m.id);
+    });
+    
+    // Debug désactivé pour éviter le spam console
+    // Les logs sont maintenant gérés par le message d'avertissement visuel sur la page
+    // if (import.meta.env.DEV && pair && (filtered.length !== mixerIds.length)) {
+    //   console.log(`[${pair}] ⚠️ Malaxeurs manquants:`, {
+    //     attendus: mixerIds,
+    //     trouvés: filtered.map(m => ({ id: m.id, name: m.name })),
+    //     disponibles: mixers.map(m => ({ id: m.id, name: m.name }))
+    //   });
+    // }
+    return filtered;
+  }, [mixers, mixerIds, pair]);
 
   // Gérer l'affichage du chargement avec timeout
   useEffect(() => {
@@ -76,16 +97,22 @@ export default function ProductionPage() {
     }
   }, [mixersError]);
 
-  // Debug: Log pour vérifier les malaxeurs
+  // Debug: Log désactivé pour éviter le spam console
+  // useEffect(() => {
+  //   if (import.meta.env.DEV) {
+  //     console.log('ProductionPage Debug:', {
+  //       pair,
+  //       mixerIds,
+  //       totalMixers: mixers.length,
+  //       displayedMixersCount: displayedMixers.length
+  //     });
+  //   }
+  // }, [pair]);
+
+  // Scroll uniquement au changement de paire, pas à chaque rafraîchissement
   useEffect(() => {
-    console.log('ProductionPage Debug:', {
-      pair,
-      mixerIds,
-      totalMixers: mixers.length,
-      mixerIdsInData: mixers.map(m => ({ id: m.id, name: m.name })),
-      displayedMixers: displayedMixers.map(m => ({ id: m.id, name: m.name }))
-    });
-  }, [pair, mixerIds, mixers, displayedMixers]);
+    window.scrollTo(0, 0);
+  }, [pair]); // Seulement quand la paire change
 
   // Réinitialiser l'onglet actif quand on change de page
   useEffect(() => {
@@ -98,23 +125,36 @@ export default function ProductionPage() {
   }, [pair]);
 
   useEffect(() => {
-    if (!pair || mixerIds.length === 0) {
+    if (!pair || mixerIds.length === 0 || mixersLoading) {
       return;
     }
 
     const fetchData = async () => {
+      // Éviter les requêtes multiples simultanées
+      if (fetchingRef.current) {
+        return;
+      }
+      
+      fetchingRef.current = true;
       try {
         const [recipesData, alarmsData, batchesData] = await Promise.all([
           recipesAPI.getAll().catch(err => {
-            console.error('Error fetching recipes:', err);
+            // Ne pas logger les erreurs réseau répétées pour éviter le spam
+            if (!err.message?.includes('Failed to fetch')) {
+              console.error('Error fetching recipes:', err);
+            }
             return [];
           }),
           alarmsAPI.getAll().catch(err => {
-            console.error('Error fetching alarms:', err);
+            if (!err.message?.includes('Failed to fetch')) {
+              console.error('Error fetching alarms:', err);
+            }
             return [];
           }),
           batchesAPI.getAll().catch(err => {
-            console.error('Error fetching batches:', err);
+            if (!err.message?.includes('Failed to fetch')) {
+              console.error('Error fetching batches:', err);
+            }
             return [];
           }),
         ]);
@@ -135,24 +175,32 @@ export default function ProductionPage() {
             const allEtapes = etapesArrays.flat();
             setEtapesExecution(allEtapes);
           } catch (error) {
-            console.error('Error fetching etapes execution:', error);
+            // Ne pas logger les erreurs réseau répétées
+            if (!(error instanceof Error && error.message?.includes('Failed to fetch'))) {
+              console.error('Error fetching etapes execution:', error);
+            }
             setEtapesExecution([]);
           }
         } else {
           setEtapesExecution([]);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        // Ne pas logger les erreurs réseau répétées
+        if (!(error instanceof Error && error.message?.includes('Failed to fetch'))) {
+          console.error('Error fetching data:', error);
+        }
+      } finally {
+        fetchingRef.current = false;
       }
     };
     
-    // Attendre un peu que les mixers soient chargés avant de charger les autres données
-    if (!mixersLoading) {
-      fetchData();
-      const interval = setInterval(fetchData, 2000); // Rafraîchissement toutes les 2 secondes
-      return () => clearInterval(interval);
-    }
-  }, [pair, mixerIds, mixersLoading]);
+    // Premier chargement
+    fetchData();
+    
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchData, 5000);
+    // return () => clearInterval(interval);
+  }, [pair, mixerIds.length, mixersLoading]); // Utiliser mixerIds.length au lieu de mixerIds pour éviter les re-renders
 
   const handleStartRecipe = async (mixerId: number) => {
     const recipeId = selectedRecipeId[mixerId];
@@ -206,6 +254,21 @@ export default function ProductionPage() {
   const handleDefaut = (mixerId: number) => {
     alert(`Afficher les défauts du malaxeur ${mixerId}`);
     // TODO: Implémenter l'affichage des défauts
+  };
+
+  const handleAcquitDefauts = async (mixerId: number) => {
+    if (!confirm(`Êtes-vous sûr de vouloir acquitter tous les défauts du malaxeur ${mixerId} ?`)) return;
+    
+    try {
+      // Acquitter toutes les alarmes actives pour ce malaxeur
+      const mixerAlarms = alarms.filter(a => a.mixerId === mixerId && a.status === 'Active');
+      await Promise.all(mixerAlarms.map(a => alarmsAPI.acknowledge(a.id)));
+      alert('Défauts acquittés avec succès');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error acknowledging defects:', error);
+      alert('Erreur lors de l\'acquittement des défauts');
+    }
   };
 
   const handleAppelOperateur = (mixerId: number) => {
@@ -322,42 +385,6 @@ export default function ProductionPage() {
         <h1 className="text-3xl font-bold text-gray-900">Production - {pair?.replace('B', 'BUTYL') || pair}</h1>
       </div>
 
-      {/* Onglets communs */}
-      <div className="border-b border-gray-300">
-        <nav className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('production')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'production'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Production {pair?.replace('B', 'BUTYL') || pair}
-          </button>
-          <button
-            onClick={() => setActiveTab('transfert')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'transfert'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Transfert Poudre
-          </button>
-          <button
-            onClick={() => setActiveTab('stockage')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'stockage'
-                ? 'border-primary-500 text-primary-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Stockage
-          </button>
-        </nav>
-      </div>
-
       {activeTab === 'production' && (
         <>
               {/* Affichage des deux malaxeurs */}
@@ -452,7 +479,29 @@ export default function ProductionPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ fontSize: 'clamp(12px, 1.2vw, 16px)' }}>
+        <>
+          {/* Message d'information si certains malaxeurs manquent */}
+          {displayedMixers.length < mixerIds.length && (
+            <div className="card bg-yellow-50 border-yellow-200 border-2">
+              <div className="flex items-start gap-3">
+                <div className="text-yellow-600 text-xl">⚠️</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-yellow-900 mb-1">Malaxeurs manquants</h3>
+                  <p className="text-sm text-yellow-800">
+                    Pour la paire <strong>{pair}</strong>, {mixerIds.length} malaxeur{mixerIds.length > 1 ? 's sont' : ' est'} attendu{mixerIds.length > 1 ? 's' : ''} (IDs: {mixerIds.join(', ')}) mais seulement {displayedMixers.length} {displayedMixers.length > 1 ? 'sont' : 'est'} affiché{displayedMixers.length > 1 ? 's' : ''}.
+                  </p>
+                  <p className="text-sm text-yellow-800 mt-2">
+                    Malaxeurs trouvés: {displayedMixers.map(m => `B${m.id}`).join(', ') || 'Aucun'}
+                  </p>
+                  <p className="text-sm text-yellow-800 mt-1">
+                    Malaxeurs manquants: {mixerIds.filter(id => !displayedMixers.some(m => m.id === id)).map(id => `B${id}`).join(', ') || 'Aucun'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ fontSize: 'clamp(12px, 1.2vw, 16px)' }}>
           {displayedMixers.map((mixer) => {
           if (!mixer) return null;
           
@@ -474,6 +523,12 @@ export default function ProductionPage() {
                     className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium"
                   >
                     DEFAUT
+                  </button>
+                  <button
+                    onClick={() => handleAcquitDefauts(mixer.id)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+                  >
+                    ACQUIT DEFAUTS
                   </button>
                   <button
                     onClick={() => handleAppelOperateur(mixer.id)}
@@ -695,11 +750,11 @@ export default function ProductionPage() {
                       const isCurrent = stepNum === (mixer.currentStep || 0);
                       const stepExec = batch ? getCurrentEtapeExecution(batch.id, stepNum) : null;
                       
-                      let bgColor = 'bg-gray-50'; // Blanc/par défaut (pas faite)
+                      let bgColor = 'bg-white border-gray-200'; // Blanc (pas faite)
                       if (isCompleted || stepExec?.statut === 'TERMINE') {
                         bgColor = 'bg-green-50 border-green-200'; // Vert (finie)
                       } else if (isCurrent || stepExec?.statut === 'EN_COURS') {
-                        bgColor = 'bg-blue-50 border-blue-200'; // Bleu (en cours)
+                        bgColor = 'bg-gray-100 border-gray-300'; // Gris (en cours)
                       }
                       
                       return (
@@ -754,13 +809,13 @@ export default function ProductionPage() {
                 </div>
               </div>
 
-              {/* Zone d'alarmes */}
-              {mixerAlarms.length > 0 && (
-                <div className="border-t pt-4">
-                  <h3 className="font-semibold mb-2 flex items-center gap-2 text-gray-900">
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
-                    Alarmes actives ({mixerAlarms.length})
-                  </h3>
+              {/* Zone d'alarmes et défauts */}
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-2 flex items-center gap-2 text-gray-900">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Alarmes et défauts ({mixerAlarms.length})
+                </h3>
+                {mixerAlarms.length > 0 ? (
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {mixerAlarms.map((alarm) => (
                       <div
@@ -779,385 +834,17 @@ export default function ProductionPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="text-sm text-gray-500 italic">Aucun défaut actif</div>
+                )}
+              </div>
             </div>
           );
         })}
         </div>
-      )}
         </>
       )}
-
-      {activeTab === 'transfert' && (
-        <div className="space-y-6">
-          {/* État des systèmes de transfert */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
-              <ArrowRightLeft className="w-5 h-5" />
-              État des systèmes de transfert
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(transferStatus).map(([systemName, status]) => (
-                <div key={systemName} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-medium text-gray-900">{systemName}</h3>
-                    <span className={`px-3 py-1 rounded text-sm font-semibold ${
-                      status === 'actif' ? 'bg-green-100 text-green-800' :
-                      status === 'erreur' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {status === 'actif' ? 'Actif' : status === 'erreur' ? 'Erreur' : 'Arrêt'}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => setTransferStatus({ ...transferStatus, [systemName]: 'actif' })}
-                      disabled={status === 'actif'}
-                      className="flex-1 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
-                    >
-                      Démarrer
-                    </button>
-                    <button
-                      onClick={() => setTransferStatus({ ...transferStatus, [systemName]: 'arrêt' })}
-                      disabled={status === 'arrêt'}
-                      className="flex-1 px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
-                    >
-                      Arrêter
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Informations sur les poudres */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Poudres disponibles
-            </h2>
-            
-            <div className="space-y-3">
-              <div className="border rounded-lg p-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium text-gray-900">Poudre A</h3>
-                    <p className="text-sm text-gray-600">Silo Principal</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900">850 kg</div>
-                    <div className="text-xs text-gray-500">Capacité: 1000 kg</div>
-                  </div>
-                </div>
-                <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '85%' }}></div>
-                </div>
-              </div>
-              
-              <div className="border rounded-lg p-3">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium text-gray-900">Poudre B</h3>
-                    <p className="text-sm text-gray-600">Silo Principal</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900">620 kg</div>
-                    <div className="text-xs text-gray-500">Capacité: 1000 kg</div>
-                  </div>
-                </div>
-                <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: '62%' }}></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Historique des transferts */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 border-b pb-2">Historique des transferts</h2>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Date/Heure</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Système</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Produit</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Quantité</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Destination</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Statut</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm">{new Date().toLocaleString('fr-FR')}</td>
-                    <td className="border p-3 text-sm">Convoyeur B1-B2</td>
-                    <td className="border p-3 text-sm">Poudre A</td>
-                    <td className="border p-3 text-sm">50 kg</td>
-                    <td className="border p-3 text-sm">Malaxeur B1</td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                        Terminé
-                      </span>
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm">{new Date(Date.now() - 3600000).toLocaleString('fr-FR')}</td>
-                    <td className="border p-3 text-sm">Silo Principal</td>
-                    <td className="border p-3 text-sm">Poudre B</td>
-                    <td className="border p-3 text-sm">75 kg</td>
-                    <td className="border p-3 text-sm">Malaxeur B2</td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                        Terminé
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'stockage' && (
-        <div className="space-y-6">
-          {/* Vue d'ensemble du stockage */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 border-b pb-2 flex items-center gap-2">
-              <Warehouse className="w-5 h-5" />
-              État des réservoirs et silos
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {storageData.map((storage) => (
-                <div key={storage.id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{storage.name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {storage.currentLevel}{storage.unit} / {storage.maxCapacity}{storage.unit}
-                      </p>
-                    </div>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      storage.status === 'Critique' ? 'bg-red-100 text-red-800' :
-                      storage.status === 'Bas' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>
-                      {storage.status}
-                    </span>
-                  </div>
-                  
-                  <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-                    <div 
-                      className={`h-3 rounded-full ${
-                        storage.status === 'Critique' ? 'bg-red-600' :
-                        storage.status === 'Bas' ? 'bg-yellow-600' :
-                        'bg-green-600'
-                      }`}
-                      style={{ width: `${storage.currentLevel}%` }}
-                    ></div>
-                  </div>
-                  
-                  {storage.status === 'Critique' && (
-                    <div className="flex items-center gap-1 text-red-600 text-xs mt-2">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Niveau critique - Réapprovisionnement requis</span>
-                    </div>
-                  )}
-                  {storage.status === 'Bas' && (
-                    <div className="flex items-center gap-1 text-yellow-600 text-xs mt-2">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Niveau bas - Surveiller</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Détails par produit */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 border-b pb-2">Détails par produit</h2>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Produit</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Stock actuel</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Capacité max</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Seuil min</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Niveau</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Statut</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Tendance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm font-medium">Poudre A</td>
-                    <td className="border p-3 text-sm">850 kg</td>
-                    <td className="border p-3 text-sm">1000 kg</td>
-                    <td className="border p-3 text-sm">100 kg</td>
-                    <td className="border p-3 text-sm">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-green-600 h-2 rounded-full" style={{ width: '85%' }}></div>
-                      </div>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                        Normal
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <TrendingDown className="w-4 h-4 text-gray-400 inline" />
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm font-medium">Poudre B</td>
-                    <td className="border p-3 text-sm">620 kg</td>
-                    <td className="border p-3 text-sm">1000 kg</td>
-                    <td className="border p-3 text-sm">100 kg</td>
-                    <td className="border p-3 text-sm">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-green-600 h-2 rounded-full" style={{ width: '62%' }}></div>
-                      </div>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                        Normal
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <TrendingUp className="w-4 h-4 text-green-600 inline" />
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm font-medium">D10</td>
-                    <td className="border p-3 text-sm">200 L</td>
-                    <td className="border p-3 text-sm">1000 L</td>
-                    <td className="border p-3 text-sm">100 L</td>
-                    <td className="border p-3 text-sm">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-yellow-600 h-2 rounded-full" style={{ width: '20%' }}></div>
-                      </div>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-800">
-                        Bas
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <TrendingDown className="w-4 h-4 text-yellow-600 inline" />
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm font-medium">D200</td>
-                    <td className="border p-3 text-sm">850 L</td>
-                    <td className="border p-3 text-sm">1000 L</td>
-                    <td className="border p-3 text-sm">100 L</td>
-                    <td className="border p-3 text-sm">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-green-600 h-2 rounded-full" style={{ width: '85%' }}></div>
-                      </div>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                        Normal
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <TrendingUp className="w-4 h-4 text-green-600 inline" />
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm font-medium">Huile</td>
-                    <td className="border p-3 text-sm">100 L</td>
-                    <td className="border p-3 text-sm">1000 L</td>
-                    <td className="border p-3 text-sm">100 L</td>
-                    <td className="border p-3 text-sm">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div className="bg-red-600 h-2 rounded-full" style={{ width: '10%' }}></div>
-                      </div>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">
-                        Critique
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">
-                      <TrendingDown className="w-4 h-4 text-red-600 inline" />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Historique des mouvements */}
-          <div className="card">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 border-b pb-2">Historique des mouvements</h2>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Date/Heure</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Type</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Produit</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Quantité</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Stock avant</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Stock après</th>
-                    <th className="border p-3 text-left text-sm font-medium text-gray-700">Opérateur</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm">{new Date().toLocaleString('fr-FR')}</td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">
-                        Sortie
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">Huile</td>
-                    <td className="border p-3 text-sm">-50 L</td>
-                    <td className="border p-3 text-sm">150 L</td>
-                    <td className="border p-3 text-sm">100 L</td>
-                    <td className="border p-3 text-sm">Opérateur 1</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm">{new Date(Date.now() - 7200000).toLocaleString('fr-FR')}</td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">
-                        Entrée
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">D200</td>
-                    <td className="border p-3 text-sm">+200 L</td>
-                    <td className="border p-3 text-sm">650 L</td>
-                    <td className="border p-3 text-sm">850 L</td>
-                    <td className="border p-3 text-sm">Opérateur 2</td>
-                  </tr>
-                  <tr className="hover:bg-gray-50">
-                    <td className="border p-3 text-sm">{new Date(Date.now() - 10800000).toLocaleString('fr-FR')}</td>
-                    <td className="border p-3 text-sm">
-                      <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">
-                        Sortie
-                      </span>
-                    </td>
-                    <td className="border p-3 text-sm">Poudre A</td>
-                    <td className="border p-3 text-sm">-50 kg</td>
-                    <td className="border p-3 text-sm">900 kg</td>
-                    <td className="border p-3 text-sm">850 kg</td>
-                    <td className="border p-3 text-sm">Opérateur 1</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

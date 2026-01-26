@@ -11,10 +11,10 @@ export function useMixers() {
     try {
       setLoading(true);
       const data = await mixersAPI.getAll();
-      console.log('Mixers data received:', data);
-      if (data && data.length > 0) {
-        console.log('First mixer sample:', data[0]);
-      }
+      // Logs désactivés pour éviter le spam - activer seulement en développement si nécessaire
+      // if (import.meta.env.DEV) {
+      //   console.log('Mixers data received:', data.length, 'mixers');
+      // }
       setMixers(data);
       setError(null);
     } catch (err) {
@@ -28,9 +28,9 @@ export function useMixers() {
   useEffect(() => {
     fetchMixers();
     
-    // Rafraîchir toutes les 5 secondes
-    const interval = setInterval(fetchMixers, 5000);
-    return () => clearInterval(interval);
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchMixers, 5000);
+    // return () => clearInterval(interval);
   }, []);
 
   const updateMixer = async (id: number, updates: Partial<Mixer>) => {
@@ -68,9 +68,9 @@ export function useMixer(id: number) {
   useEffect(() => {
     fetchMixer();
     
-    // Rafraîchir toutes les 2 secondes
-    const interval = setInterval(fetchMixer, 2000);
-    return () => clearInterval(interval);
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchMixer, 2000);
+    // return () => clearInterval(interval);
   }, [id]);
 
   const updateMixer = async (updates: Partial<Mixer>) => {

@@ -14,7 +14,12 @@ import MaintenancePage from './pages/MaintenancePage';
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />

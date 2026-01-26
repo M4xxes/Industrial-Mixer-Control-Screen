@@ -41,8 +41,9 @@ export default function AlarmsPage() {
       }
     };
     fetchAlarms();
-    const interval = setInterval(fetchAlarms, 5000); // Rafraîchissement toutes les 5 secondes
-    return () => clearInterval(interval);
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchAlarms, 5000);
+    // return () => clearInterval(interval);
   }, []);
 
   const handleAcknowledge = async (alarmId: string) => {

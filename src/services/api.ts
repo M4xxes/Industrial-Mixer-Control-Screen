@@ -35,6 +35,11 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    // Ne pas logger les erreurs 404 pour les endpoints qui n'existent pas encore (comme ingredients)
+    if (response.status === 404 && endpoint.includes('/ingredients')) {
+      // Retourner un tableau vide silencieusement pour ingredients
+      return [];
+    }
     throw new Error(`API Error: ${response.statusText}`);
   }
 

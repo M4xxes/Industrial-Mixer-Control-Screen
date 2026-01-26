@@ -53,20 +53,18 @@ export default function MixerVisual({ mixer, size = 'medium' }: MixerVisualProps
         <div className={cn('absolute inset-0', getStatusOverlay(mixer.status))} />
       </div>
 
-      {/* Indicateurs de moteurs */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2">
+      {/* Indicateurs de moteurs - Retirés pour enlever les spams sur les images */}
+      {/* <div className="absolute top-4 left-4 flex flex-col gap-2">
         <div className="flex items-center gap-2 bg-black/50 rounded-lg px-2 py-1">
           <div className={cn('w-3 h-3 rounded-full', getMotorColor(mixer.motorArm))} />
-          <span className="text-white text-xs font-medium">Bras (GV)</span>
         </div>
         <div className="flex items-center gap-2 bg-black/50 rounded-lg px-2 py-1">
           <div className={cn('w-3 h-3 rounded-full', getMotorColor(mixer.motorScrew))} />
-          <span className="text-white text-xs font-medium">Vis (PV/GV)</span>
         </div>
-      </div>
+      </div> */}
 
-      {/* Badge de statut */}
-      <div className="absolute top-4 right-4">
+      {/* Badge de statut - Retiré pour enlever les spams sur les images */}
+      {/* <div className="absolute top-4 right-4">
         <span className={cn(
           'px-3 py-1 rounded-full text-xs font-semibold',
           mixer.status === 'Marche' && 'bg-green-500 text-white',
@@ -76,17 +74,17 @@ export default function MixerVisual({ mixer, size = 'medium' }: MixerVisualProps
         )}>
           {mixer.status}
         </span>
-      </div>
+      </div> */}
 
-      {/* Informations en bas */}
-      <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
+      {/* Informations en bas - Retiré pour enlever le texte en noir sur les images */}
+      {/* <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
         <div className="text-white text-sm font-medium">{mixer.name}</div>
         {mixer.recipe && (
           <div className="text-white/80 text-xs">
             {mixer.recipe.name} - Étape {mixer.currentStep}/{mixer.recipe.steps.length}
           </div>
         )}
-      </div>
+      </div> */}
     </div>
   );
 }

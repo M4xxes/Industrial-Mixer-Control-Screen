@@ -7,7 +7,6 @@ import { Wifi, WifiOff, CheckCircle2, XCircle, Plus, Edit, Trash2, X, Lock, User
 interface User {
   id: string;
   username: string;
-  email: string;
   role: 'Admin' | 'Operator' | 'Viewer';
   createdAt?: string;
   lastLogin?: string;
@@ -21,12 +20,10 @@ export default function MaintenancePage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userFormData, setUserFormData] = useState<{
     username: string;
-    email: string;
     password: string;
     role: 'Admin' | 'Operator' | 'Viewer';
   }>({
     username: '',
-    email: '',
     password: '',
     role: 'Operator',
   });
@@ -67,7 +64,6 @@ export default function MaintenancePage() {
           const transformedUsers = Array.isArray(usersData) ? usersData.map((u: any) => ({
             id: u.id || u.user_id,
             username: u.username || u.user_name,
-            email: u.email,
             role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
             createdAt: u.createdAt || u.created_at,
             lastLogin: u.lastLogin || u.last_login,
@@ -83,8 +79,9 @@ export default function MaintenancePage() {
       }
     };
     fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchData, 5000);
+    // return () => clearInterval(interval);
   }, []);
 
   // Simuler l'état des communications automates
@@ -101,7 +98,6 @@ export default function MaintenancePage() {
       setEditingUser(user);
       setUserFormData({
         username: user.username,
-        email: user.email,
         password: '',
         role: user.role,
       });
@@ -109,7 +105,6 @@ export default function MaintenancePage() {
       setEditingUser(null);
       setUserFormData({
         username: '',
-        email: '',
         password: '',
         role: 'Operator',
       });
@@ -122,7 +117,6 @@ export default function MaintenancePage() {
     setEditingUser(null);
     setUserFormData({
       username: '',
-      email: '',
       password: '',
       role: 'Operator',
     });
@@ -132,18 +126,6 @@ export default function MaintenancePage() {
     // Validation des champs
     if (!userFormData.username || !userFormData.username.trim()) {
       alert('Veuillez saisir un nom d\'utilisateur');
-      return;
-    }
-
-    if (!userFormData.email || !userFormData.email.trim()) {
-      alert('Veuillez saisir un email');
-      return;
-    }
-
-    // Validation de l'email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(userFormData.email)) {
-      alert('Veuillez saisir un email valide');
       return;
     }
 
@@ -159,14 +141,12 @@ export default function MaintenancePage() {
       if (editingUser) {
         await usersAPI.update(editingUser.id, {
           username: userFormData.username.trim(),
-          email: userFormData.email.trim(),
           role: userFormData.role,
         });
         alert('Utilisateur modifié avec succès');
       } else {
         await usersAPI.create({
           username: userFormData.username.trim(),
-          email: userFormData.email.trim(),
           password: userFormData.password,
           role: userFormData.role,
         });
@@ -202,7 +182,6 @@ export default function MaintenancePage() {
           const transformedUsers = Array.isArray(usersData) ? usersData.map((u: any) => ({
             id: u.id || u.user_id,
             username: u.username || u.user_name,
-            email: u.email,
             role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
             createdAt: u.createdAt || u.created_at,
             lastLogin: u.lastLogin || u.last_login,
@@ -579,7 +558,7 @@ export default function MaintenancePage() {
             <thead>
               <tr className="bg-gray-100">
                 <th className="border p-3 text-left">Nom d'utilisateur</th>
-                <th className="border p-3 text-left">Email</th>
+                <th className="border p-3 text-left">Mot de passe</th>
                 <th className="border p-3 text-left">Rôle</th>
                 <th className="border p-3 text-left">Dernière connexion</th>
                 <th className="border p-3 text-left">Actions</th>
@@ -596,7 +575,7 @@ export default function MaintenancePage() {
                 users.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="border p-3 font-medium">{user.username}</td>
-                    <td className="border p-3">{user.email}</td>
+                    <td className="border p-3">••••••••</td>
                     <td className="border p-3">
                       <span className={`px-2 py-1 rounded text-xs font-semibold ${
                         user.role === 'Admin' ? 'bg-purple-100 text-purple-800' :
@@ -642,10 +621,10 @@ export default function MaintenancePage() {
         </div>
       </div>
 
-      {/* Paramètres du cahier des charges */}
+      {/* Paramètres automates */}
       <div className="card">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Paramètres du cahier des charges</h2>
+          <h2 className="text-xl font-semibold">Paramètres automates</h2>
         </div>
 
         {/* Onglets pour les catégories de paramètres */}
@@ -687,13 +666,25 @@ export default function MaintenancePage() {
                       {param.name}
                     </label>
                     <div className="text-xs text-gray-500 mb-2 font-mono">{param.address}</div>
-                    <input
-                      type="text"
-                      value={parameterValues[param.address] || ''}
-                      onChange={(e) => handleParameterChange(param.address, e.target.value)}
-                      placeholder="Valeur"
-                      className="w-full border rounded-md px-3 py-2 text-sm"
-                    />
+                    {category.id === 'Stockage' ? (
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={parameterValues[param.address] === 'true' || parameterValues[param.address] === '1'}
+                          onChange={(e) => handleParameterChange(param.address, e.target.checked ? '1' : '0')}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">Activé</span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={parameterValues[param.address] || ''}
+                        onChange={(e) => handleParameterChange(param.address, e.target.value)}
+                        placeholder="Valeur"
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -745,18 +736,6 @@ export default function MaintenancePage() {
                   onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
                   className="w-full border rounded-md px-3 py-2"
                   placeholder="Nom d'utilisateur"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  value={userFormData.email}
-                  onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
-                  className="w-full border rounded-md px-3 py-2"
-                  placeholder="email@example.com"
                 />
               </div>
               {!editingUser && (

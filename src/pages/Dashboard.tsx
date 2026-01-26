@@ -1,6 +1,6 @@
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useMixers } from '../hooks/useMixers';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { inventoryAPI, alarmsAPI, batchesAPI } from '../services/api';
 import { Inventory, Alarm, Batch } from '../types';
@@ -9,41 +9,65 @@ import { Package, AlertTriangle, TrendingUp } from 'lucide-react';
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
+  const location = useLocation();
   const { mixers, loading: mixersLoading } = useMixers();
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
+  const lastPathRef = useRef<string>(''); // Pour éviter les scrolls multiples sur la même route
 
   // Rediriger si pas admin
   if (!isAdmin()) {
     return <Navigate to="/alarms" replace />;
   }
 
+  // Scroll uniquement lors d'un changement de route vers Dashboard, pas à chaque rafraîchissement
   useEffect(() => {
+    // Ne scroller que si on vient d'une autre page (changement de route)
+    if (location.pathname === '/' && lastPathRef.current !== location.pathname) {
+      window.scrollTo(0, 0);
+      lastPathRef.current = location.pathname;
+    }
+  }, [location.pathname]); // Seulement quand la route change
+
+  useEffect(() => {
+    let fetching = false; // Flag pour éviter les requêtes multiples simultanées
+    
     const fetchData = async () => {
+      // Éviter les requêtes multiples simultanées
+      if (fetching) {
+        return;
+      }
+      
+      fetching = true;
       try {
         const [invData, alarmsData, batchesData] = await Promise.all([
-          inventoryAPI.getAll(),
-          alarmsAPI.getAll(),
-          batchesAPI.getAll(),
+          inventoryAPI.getAll().catch(() => []),
+          alarmsAPI.getAll().catch(() => []),
+          batchesAPI.getAll().catch(() => []),
         ]);
-        setInventory(invData);
-        setAlarms(alarmsData);
-        setBatches(batchesData);
+        setInventory(invData || []);
+        setAlarms(alarmsData || []);
+        setBatches(batchesData || []);
       } catch (error) {
-        console.error('Error fetching data:', error);
-        // Afficher un message d'erreur si le backend n'est pas disponible
-        if (error instanceof Error && error.message.includes('fetch')) {
-          console.warn('⚠️ Le serveur backend n\'est peut-être pas démarré. Vérifiez que le serveur tourne sur http://localhost:3001');
+        // Ne pas logger les erreurs réseau répétées pour éviter le spam
+        if (!(error instanceof Error && error.message?.includes('Failed to fetch'))) {
+          console.error('Error fetching data:', error);
+          // Afficher un message d'erreur si le backend n'est pas disponible
+          if (error instanceof Error && error.message.includes('fetch')) {
+            console.warn('⚠️ Le serveur backend n\'est peut-être pas démarré. Vérifiez que le serveur tourne sur http://localhost:3001');
+          }
         }
       } finally {
         setLoading(false);
+        fetching = false;
       }
     };
     fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+    // Rafraîchissement automatique désactivé - les données ne se rafraîchissent que manuellement
+    // const interval = setInterval(fetchData, 5000);
+    // return () => clearInterval(interval);
   }, []);
 
   // Fonction pour obtenir le N° de lot actuel d'un malaxeur
@@ -229,19 +253,25 @@ export default function Dashboard() {
               >
                 <MixerVisual mixer={mixer} size="small" />
                 <div className="mt-4 space-y-2">
+                  {/* Toujours afficher nom de la recette, lot et fabricant */}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Recette</span>
+                    <span className="font-medium">{mixer.recipe?.name || batch?.recipeName || '-'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">N° de lot</span>
+                    <span className="font-medium">{batch?.batchNumber || getCurrentBatchNumber(mixer.id) || '-'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Fabricant</span>
+                    <span className="font-medium">{batch?.fabricant || batch?.operatorId || '-'}</span>
+                  </div>
+                  
                   {mixer.recipe && mixer.status === 'Production' && (
                     <>
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-sm pt-2 border-t">
                         <span className="text-gray-600">Formule</span>
                         <span className="font-medium">{batch?.formule || mixer.recipe.name}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">N° de lot</span>
-                        <span className="font-medium">{batch?.batchNumber || getCurrentBatchNumber(mixer.id)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Fabricant</span>
-                        <span className="font-medium">{batch?.fabricant || batch?.operatorId || '-'}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Heure de début</span>
@@ -271,15 +301,7 @@ export default function Dashboard() {
                   )}
                   {mixer.recipe && mixer.status !== 'Production' && (
                     <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Recette</span>
-                        <span className="font-medium">{mixer.recipe.name}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">N° de lot</span>
-                        <span className="font-medium">{getCurrentBatchNumber(mixer.id)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-sm pt-2 border-t">
                         <span className="text-gray-600">Étape</span>
                         <span className="font-medium">
                           {mixer.currentStep || 0} / {mixer.recipe.steps?.length || 0}
