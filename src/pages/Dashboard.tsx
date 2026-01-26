@@ -238,17 +238,26 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {mixers.map((mixer) => {
             const batch = batches.find(b => b.mixerId === mixer.id && (b.status === 'En cours' || b.status === 'Terminé'));
-            // Déterminer la route de production selon le malaxeur
-            const getProductionRoute = (mixerId: number) => {
-              if ([1, 2].includes(mixerId)) return '/production/B1-2';
-              if ([3, 5].includes(mixerId)) return '/production/B3-5';
-              if ([6, 7].includes(mixerId)) return '/production/B6-7';
-              return `/mixer/${mixerId}`;
+            // Déterminer la route de production selon le nom du malaxeur (plus fiable que l'ID)
+            const getProductionRoute = (mixer: { id: number; name: string }) => {
+              // Extraire le numéro depuis le nom (ex: "Malaxeur B5" -> 5, "Malaxeur B6" -> 6)
+              const mixerNumber = mixer.name.match(/B(\d+)/)?.[1];
+              if (mixerNumber) {
+                const num = parseInt(mixerNumber, 10);
+                if ([1, 2].includes(num)) return '/production/B1-2';
+                if ([3, 5].includes(num)) return '/production/B3-5';
+                if ([6, 7].includes(num)) return '/production/B6-7';
+              }
+              // Fallback: utiliser l'ID si le nom ne contient pas de numéro
+              if ([1, 2].includes(mixer.id)) return '/production/B1-2';
+              if ([3, 5].includes(mixer.id)) return '/production/B3-5';
+              if ([6, 7].includes(mixer.id)) return '/production/B6-7';
+              return `/mixer/${mixer.id}`;
             };
             return (
               <Link
                 key={mixer.id}
-                to={getProductionRoute(mixer.id)}
+                to={getProductionRoute(mixer)}
                 className="card hover:shadow-lg transition-shadow"
               >
                 <MixerVisual mixer={mixer} size="small" />

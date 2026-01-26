@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMixers } from '../hooks/useMixers';
 import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI } from '../services/api';
 import { Recipe, Alarm, Batch, EtapesExecution } from '../types';
-import { Play, Square, Check, AlertTriangle } from 'lucide-react';
+import { Play, Square, Check, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function ProductionPage() {
   const { pair } = useParams<{ pair: string }>();
@@ -20,6 +20,7 @@ export default function ProductionPage() {
   const [showLoading, setShowLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const fetchingRef = useRef(false); // Pour éviter les requêtes multiples simultanées
+  const [showSteps, setShowSteps] = useState<{ [key: number]: boolean }>({}); // État pour afficher/masquer les étapes par malaxeur
   
 
   // Déterminer les IDs des malaxeurs selon la paire (mémorisé pour éviter les re-renders)
@@ -507,7 +508,12 @@ export default function ProductionPage() {
           
           const batch = getCurrentBatch(mixer.id);
           const mixerAlarms = getMixerAlarms(mixer.id);
-          const currentStep = mixer.recipe?.steps?.[(mixer.currentStep || 1) - 1];
+          // Utiliser la recette du mixer si disponible, sinon la recette sélectionnée dans le dropdown
+          const selectedRecipe = selectedRecipeId[mixer.id] 
+            ? recipes.find(r => r.id === selectedRecipeId[mixer.id])
+            : null;
+          const activeRecipe = mixer.recipe || selectedRecipe;
+          const currentStep = activeRecipe?.steps?.[(mixer.currentStep || 1) - 1];
           const currentEtapeExec = batch && mixer.currentStep 
             ? getCurrentEtapeExecution(batch.id, mixer.currentStep) 
             : null;
@@ -657,7 +663,7 @@ export default function ProductionPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Etape N°:</span>
                   <span className="text-gray-900 font-medium">
-                    {mixer.currentStep || 0} / {mixer.recipe?.steps?.length || 0}
+                    {mixer.currentStep || 0} / {activeRecipe?.steps?.length || 0}
                   </span>
                 </div>
                 {/* Fonction - toujours affichée */}
@@ -739,48 +745,121 @@ export default function ProductionPage() {
                 </div>
               </div>
 
-              {/* Liste des étapes de la recette en cours */}
-              {mixer.recipe && mixer.status === 'Production' && (
-                <div className="border-t pt-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Étapes de la recette</h3>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {mixer.recipe.steps.map((step, index) => {
-                      const stepNum = index + 1;
-                      const isCompleted = stepNum < (mixer.currentStep || 0);
-                      const isCurrent = stepNum === (mixer.currentStep || 0);
-                      const stepExec = batch ? getCurrentEtapeExecution(batch.id, stepNum) : null;
-                      
-                      let bgColor = 'bg-white border-gray-200'; // Blanc (pas faite)
-                      if (isCompleted || stepExec?.statut === 'TERMINE') {
-                        bgColor = 'bg-green-50 border-green-200'; // Vert (finie)
-                      } else if (isCurrent || stepExec?.statut === 'EN_COURS') {
-                        bgColor = 'bg-gray-100 border-gray-300'; // Gris (en cours)
-                      }
-                      
-                      return (
-                        <div
-                          key={step.id}
-                          className={`p-2 rounded text-sm border border-gray-200 ${bgColor}`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-900 font-medium">
-                              Étape {stepNum}: {step.function}
-                            </span>
-                            <span className="text-gray-600 text-xs">
-                              {step.duration}s
-                            </span>
-                          </div>
-                          {step.product && (
-                            <div className="text-gray-600 text-xs mt-1">
-                              {step.product} {step.weight !== undefined && step.weight !== null ? `(${step.weight.toFixed(2)} Kg)` : ''}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* Tableau détaillé des étapes de la recette en cours */}
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Étapes de la recette</h3>
+                  <button
+                    onClick={() => setShowSteps(prev => ({ ...prev, [mixer.id]: !prev[mixer.id] }))}
+                    disabled={!activeRecipe}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {showSteps[mixer.id] ? (
+                      <>
+                        <ChevronUp className="w-4 h-4" />
+                        Masquer les détails
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4" />
+                        Afficher les détails
+                      </>
+                    )}
+                  </button>
                 </div>
-              )}
+                {!activeRecipe ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="mb-2">Aucune recette sélectionnée</p>
+                    <p className="text-sm">Sélectionnez une recette dans le menu déroulant ci-dessus pour voir les étapes</p>
+                  </div>
+                ) : !showSteps[mixer.id] ? (
+                  <div className="text-center py-4 text-gray-500">
+                    <p className="text-sm">Cliquez sur "Afficher les détails" pour voir les {activeRecipe.steps?.length || 0} étapes de la recette</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr className="border-b">
+                          <th className="text-left p-2">Étape</th>
+                          <th className="text-left p-2">Fonction</th>
+                          <th className="text-left p-2">Bras</th>
+                          <th className="text-left p-2">Vis</th>
+                          <th className="text-left p-2">Ref</th>
+                          <th className="text-left p-2">Produit</th>
+                          <th className="text-right p-2">Poids prévu (Kg)</th>
+                          <th className="text-right p-2">Poids dosé (Kg)</th>
+                          <th className="text-right p-2">Vide (%)</th>
+                          <th className="text-right p-2">Mesure</th>
+                          <th className="text-left p-2">Critère</th>
+                          <th className="text-right p-2">Durée prévue (s)</th>
+                          <th className="text-right p-2">Durée réelle (s)</th>
+                          <th className="text-left p-2">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeRecipe.steps.map((step, index) => {
+                          const stepNum = index + 1;
+                          const isCompleted = stepNum < (mixer.currentStep || 0);
+                          const isCurrent = stepNum === (mixer.currentStep || 0);
+                          const stepExec = batch ? getCurrentEtapeExecution(batch.id, stepNum) : null;
+                          
+                          // Couleur de fond selon le statut
+                          let rowClass = '';
+                          if (isCompleted || stepExec?.statut === 'TERMINE') {
+                            rowClass = 'bg-green-50'; // Vert (finie)
+                          } else if (isCurrent || stepExec?.statut === 'EN_COURS') {
+                            rowClass = 'bg-gray-100'; // Gris (en cours)
+                          } else {
+                            rowClass = 'bg-white'; // Blanc (pas faite)
+                          }
+                          
+                          // Calculer la durée réelle depuis l'étape d'exécution
+                          let dureeReelle = '-';
+                          if (stepExec?.dateDebut && stepExec?.dateFin) {
+                            const debut = new Date(stepExec.dateDebut);
+                            const fin = new Date(stepExec.dateFin);
+                            dureeReelle = Math.round((fin.getTime() - debut.getTime()) / 1000).toString();
+                          } else if (stepExec?.dateDebut && isCurrent) {
+                            const debut = new Date(stepExec.dateDebut);
+                            const maintenant = new Date();
+                            dureeReelle = Math.round((maintenant.getTime() - debut.getTime()) / 1000).toString();
+                          }
+                          
+                          return (
+                            <tr key={step.id} className={`border-b hover:bg-gray-50 ${rowClass}`}>
+                              <td className="p-2 font-medium">{stepNum}</td>
+                              <td className="p-2">{step.function}</td>
+                              <td className="p-2">{step.arm || '-'}</td>
+                              <td className="p-2">{step.screw || '-'}</td>
+                              <td className="p-2">{step.ref || '-'}</td>
+                              <td className="p-2">{step.product || '-'}</td>
+                              <td className="p-2 text-right">{step.weight?.toFixed(2) || '-'}</td>
+                              <td className="p-2 text-right">{stepExec?.quantiteDosee?.toFixed(2) || '-'}</td>
+                              <td className="p-2 text-right">{step.vacuum ? `${step.vacuum}%` : '-'}</td>
+                              <td className="p-2 text-right">{step.mesure || '-'}</td>
+                              <td className="p-2">{step.critere || '-'}</td>
+                              <td className="p-2 text-right">{step.duration || '-'}</td>
+                              <td className="p-2 text-right">{dureeReelle}</td>
+                              <td className="p-2">
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                  isCompleted || stepExec?.statut === 'TERMINE' ? 'bg-green-100 text-green-800' :
+                                  isCurrent || stepExec?.statut === 'EN_COURS' ? 'bg-gray-200 text-gray-800' :
+                                  'bg-white text-gray-600'
+                                }`}>
+                                  {isCompleted || stepExec?.statut === 'TERMINE' ? 'Terminée' :
+                                   isCurrent || stepExec?.statut === 'EN_COURS' ? 'En cours' :
+                                   'En attente'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
 
               {/* Données temps réel (D10, D200, Huile) */}
               <div className="border-t pt-4 space-y-2 text-sm">
