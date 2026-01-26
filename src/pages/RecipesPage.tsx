@@ -58,10 +58,12 @@ export default function RecipesPage() {
             function: s.function as RecipeFunction,
             arm: s.arm as 'GV' | 'PV',
             screw: s.screw as 'GV' | 'PV',
+            ref: s.ref || undefined,
             duration: s.duration,
             product: s.product || undefined,
             weight: s.weight || undefined,
             vacuum: s.vacuum || undefined,
+            mesure: s.mesure || undefined,
             critere: s.critere || undefined,
             status: (s.status || 'Reversible') as StepStatus,
           })),
@@ -221,10 +223,12 @@ export default function RecipesPage() {
           function: step.function,
           arm: step.arm,
           screw: step.screw,
+          ref: step.ref || null,
           duration: step.duration,
           product: step.product || null,
           weight: step.weight || null,
           vacuum: step.vacuum || null,
+          mesure: step.mesure || null,
           critere: step.critere || null,
           status: step.status || 'Reversible',
         })),
@@ -259,10 +263,12 @@ export default function RecipesPage() {
           function: s.function as RecipeFunction,
           arm: s.arm as 'GV' | 'PV',
           screw: s.screw as 'GV' | 'PV',
+          ref: s.ref || undefined,
           duration: s.duration,
           product: s.product || undefined,
           weight: s.weight || undefined,
           vacuum: s.vacuum || undefined,
+          mesure: s.mesure || undefined,
           critere: s.critere || undefined,
           status: (s.status || 'Reversible') as StepStatus,
         })),
@@ -296,10 +302,12 @@ export default function RecipesPage() {
             function: s.function as RecipeFunction,
             arm: s.arm as 'GV' | 'PV',
             screw: s.screw as 'GV' | 'PV',
+            ref: s.ref || undefined,
             duration: s.duration,
             product: s.product || undefined,
             weight: s.weight || undefined,
             vacuum: s.vacuum || undefined,
+            mesure: s.mesure || undefined,
             critere: s.critere || undefined,
             status: (s.status || 'Reversible') as StepStatus,
           })),
@@ -606,10 +614,12 @@ export default function RecipesPage() {
                   <th className="border p-2 text-left">Fonction</th>
                   <th className="border p-2 text-left">Bras</th>
                   <th className="border p-2 text-left">Vis</th>
+                  <th className="border p-2 text-left">Référence</th>
                   <th className="border p-2 text-left">Durée (s)</th>
                   <th className="border p-2 text-left">Produit</th>
                   <th className="border p-2 text-left">Poids (Kg)</th>
                   <th className="border p-2 text-left">Vide (%)</th>
+                  <th className="border p-2 text-left">Mesure</th>
                   <th className="border p-2 text-left">Critère</th>
                   <th className="border p-2 text-left">Statut</th>
                 </tr>
@@ -621,10 +631,12 @@ export default function RecipesPage() {
                     <td className="border p-2">{step.function}</td>
                     <td className="border p-2">{step.arm}</td>
                     <td className="border p-2">{step.screw}</td>
+                    <td className="border p-2">{step.ref || '-'}</td>
                     <td className="border p-2">{step.duration}</td>
                     <td className="border p-2">{step.product || '-'}</td>
                     <td className="border p-2">{step.weight || '-'}</td>
                     <td className="border p-2">{step.vacuum || '-'}</td>
+                    <td className="border p-2">{step.mesure || '-'}</td>
                     <td className="border p-2">{step.critere || '-'}</td>
                     <td className="border p-2">{step.status || 'Reversible'}</td>
                   </tr>
@@ -720,10 +732,12 @@ export default function RecipesPage() {
                         <th className="border p-2 text-left">Fonction</th>
                         <th className="border p-2 text-left">Bras</th>
                         <th className="border p-2 text-left">Vis</th>
+                        <th className="border p-2 text-left">Référence</th>
                         <th className="border p-2 text-left">Durée (s)</th>
                         <th className="border p-2 text-left">Produit</th>
                         <th className="border p-2 text-left">Poids (Kg)</th>
                         <th className="border p-2 text-left">Vide (%)</th>
+                        <th className="border p-2 text-left">Mesure</th>
                         <th className="border p-2 text-left">Critère</th>
                         <th className="border p-2 text-left">Statut</th>
                         <th className="border p-2 text-left">Actions</th>
@@ -766,6 +780,15 @@ export default function RecipesPage() {
                           </td>
                           <td className="border p-2">
                             <input
+                              type="text"
+                              value={step.ref || ''}
+                              onChange={(e) => updateStep(step.id, 'ref', e.target.value)}
+                              className="w-full border rounded px-2 py-1"
+                              placeholder="Optionnel"
+                            />
+                          </td>
+                          <td className="border p-2">
+                            <input
                               type="number"
                               value={step.duration}
                               onChange={(e) => updateStep(step.id, 'duration', parseInt(e.target.value))}
@@ -802,6 +825,16 @@ export default function RecipesPage() {
                               step="0.1"
                               min="0"
                               max="100"
+                            />
+                          </td>
+                          <td className="border p-2">
+                            <input
+                              type="number"
+                              value={step.mesure || ''}
+                              onChange={(e) => updateStep(step.id, 'mesure', parseFloat(e.target.value))}
+                              className="w-full border rounded px-2 py-1"
+                              placeholder="Optionnel"
+                              step="0.1"
                             />
                           </td>
                           <td className="border p-2">

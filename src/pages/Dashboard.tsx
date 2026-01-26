@@ -214,25 +214,21 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {mixers.map((mixer) => {
             const batch = batches.find(b => b.mixerId === mixer.id && (b.status === 'En cours' || b.status === 'Terminé'));
+            // Déterminer la route de production selon le malaxeur
+            const getProductionRoute = (mixerId: number) => {
+              if ([1, 2].includes(mixerId)) return '/production/B1-2';
+              if ([3, 5].includes(mixerId)) return '/production/B3-5';
+              if ([6, 7].includes(mixerId)) return '/production/B6-7';
+              return `/mixer/${mixerId}`;
+            };
             return (
               <Link
                 key={mixer.id}
-                to={`/mixer/${mixer.id}`}
+                to={getProductionRoute(mixer.id)}
                 className="card hover:shadow-lg transition-shadow"
               >
                 <MixerVisual mixer={mixer} size="small" />
                 <div className="mt-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">État</span>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      mixer.status === 'Production' ? 'bg-green-100 text-green-800' :
-                      mixer.status === 'Pause' ? 'bg-yellow-100 text-yellow-800' :
-                      mixer.status === 'Alarme' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {mixer.status}
-                    </span>
-                  </div>
                   {mixer.recipe && mixer.status === 'Production' && (
                     <>
                       <div className="flex justify-between text-sm">
@@ -290,6 +286,19 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </>
+                  )}
+                  {!mixer.recipe && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">État</span>
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        mixer.status === 'Production' ? 'bg-green-100 text-green-800' :
+                        mixer.status === 'Pause' ? 'bg-yellow-100 text-yellow-800' :
+                        mixer.status === 'Alarme' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {mixer.status}
+                      </span>
+                    </div>
                   )}
                 </div>
               </Link>

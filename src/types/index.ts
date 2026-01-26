@@ -46,10 +46,12 @@ export interface RecipeStep {
   function: RecipeFunction;
   arm: 'GV' | 'PV';
   screw: 'GV' | 'PV';
+  ref?: string; // Référence
   duration: number; // en secondes
   product?: string;
   weight?: number; // en Kg
   vacuum?: number; // vide(%)
+  mesure?: number; // Mesure
   critere?: string; // critère de fin d'étape
   status?: StepStatus; // Statut de l'étape (Reversible, etc.)
 }

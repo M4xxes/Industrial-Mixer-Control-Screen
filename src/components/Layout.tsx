@@ -88,8 +88,8 @@ export default function Layout({ children }: LayoutProps) {
               {hasProductionAccess && (
                 <div className="relative">
                   <button
-                    onMouseEnter={() => setProductionMenuOpen(true)}
-                    onMouseLeave={() => setProductionMenuOpen(false)}
+                    onClick={() => setProductionMenuOpen(!productionMenuOpen)}
+                    onBlur={() => setTimeout(() => setProductionMenuOpen(false), 200)}
                     className={`inline-flex items-center px-2 xl:px-3 py-2 border-b-2 text-xs xl:text-sm font-medium whitespace-nowrap transition-colors ${
                       isProductionActive
                         ? 'border-primary-500 text-gray-900'
@@ -99,20 +99,17 @@ export default function Layout({ children }: LayoutProps) {
                     <Factory className="w-4 h-4 mr-1 xl:mr-2" />
                     <span className="hidden xl:inline">Production</span>
                     <span className="xl:hidden">Prod</span>
-                    <ChevronDown className="w-3 h-3 ml-1" />
+                    <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${productionMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {productionMenuOpen && (
-                    <div
-                      onMouseEnter={() => setProductionMenuOpen(true)}
-                      onMouseLeave={() => setProductionMenuOpen(false)}
-                      className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-200 z-50"
-                    >
+                    <div className="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 border border-gray-200 z-50">
                       {visibleProductionItems.map((item) => {
                         const isActive = location.pathname === item.path;
                         return (
                           <Link
                             key={item.path}
                             to={item.path}
+                            onClick={() => setProductionMenuOpen(false)}
                             className={`block px-4 py-2 text-sm ${
                               isActive
                                 ? 'bg-primary-50 text-primary-700 font-medium'

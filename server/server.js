@@ -2,6 +2,44 @@ import express from 'express';
 import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import { run, get, all } from './db.js';
+import crypto from 'crypto';
+
+// Fonction pour hasher un mot de passe (avec ou sans bcryptjs)
+async function hashPassword(password) {
+  try {
+    // Essayer d'utiliser bcryptjs s'il est disponible
+    const bcryptModule = await import('bcryptjs');
+    const bcrypt = bcryptModule.default || bcryptModule;
+    return await bcrypt.hash(password, 10);
+  } catch (error) {
+    // Fallback: utiliser crypto natif de Node.js (plus sécurisé que base64)
+    console.warn('⚠️  bcryptjs non disponible, utilisation de crypto natif');
+    console.warn('   Pour une meilleure sécurité, installez: npm install bcryptjs');
+    const salt = crypto.randomBytes(16).toString('hex');
+    const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+    return `${salt}:${hash}`;
+  }
+}
+
+// Fonction pour comparer un mot de passe
+async function comparePassword(password, hash) {
+  try {
+    // Essayer d'utiliser bcryptjs s'il est disponible
+    const bcryptModule = await import('bcryptjs');
+    const bcrypt = bcryptModule.default || bcryptModule;
+    return await bcrypt.compare(password, hash);
+  } catch (error) {
+    // Fallback: utiliser crypto natif
+    if (hash.includes(':')) {
+      // Format salt:hash
+      const [salt, hashValue] = hash.split(':');
+      const testHash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+      return testHash === hashValue;
+    }
+    // Ancien format base64 (pour compatibilité)
+    return Buffer.from(password).toString('base64') === hash;
+  }
+}
 
 const app = express();
 const PORT = 3001;
@@ -22,6 +60,8 @@ app.get('/', (req, res) => {
         batches: '/api/batches',
         defauts: '/api/defauts',
         etapesExecution: '/api/etapes-execution',
+        users: '/api/users',
+        ingredients: '/api/ingredients',
       },
   });
 });
@@ -548,6 +588,200 @@ app.post('/api/mixers/:id/validate-step', async (req, res) => {
     const updated = await get('SELECT * FROM mixers WHERE id = ?', [req.params.id]);
     res.json(updated);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== USERS API ==========
+
+// GET /api/users - Liste tous les utilisateurs
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await all(`
+      SELECT id, username, email, role, created_at, last_login
+      FROM users
+      ORDER BY created_at DESC
+    `);
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/users/:id - Détails d'un utilisateur
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const user = await get(`
+      SELECT id, username, email, role, created_at, last_login
+      FROM users
+      WHERE id = ?
+    `, [req.params.id]);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/users - Créer un utilisateur
+app.post('/api/users', async (req, res) => {
+  try {
+    const { username, email, password, role } = req.body;
+    
+    // Validation
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Nom d\'utilisateur, email et mot de passe sont requis' });
+    }
+    
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
+    }
+    
+    // Vérifier si l'utilisateur existe déjà
+    const existingUser = await get('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
+    if (existingUser) {
+      return res.status(409).json({ error: 'Un utilisateur avec ce nom ou cet email existe déjà' });
+    }
+    
+    // Hasher le mot de passe
+    const passwordHash = await hashPassword(password);
+    const userId = uuidv4();
+    
+    // Créer l'utilisateur
+    await run(`
+      INSERT INTO users (id, username, email, password_hash, role, created_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [userId, username, email, passwordHash, role || 'Operator']);
+    
+    // Retourner l'utilisateur créé (sans le mot de passe)
+    const newUser = await get(`
+      SELECT id, username, email, role, created_at, last_login
+      FROM users
+      WHERE id = ?
+    `, [userId]);
+    
+    res.status(201).json(newUser);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/users/:id - Modifier un utilisateur
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { username, email, role } = req.body;
+    const userId = req.params.id;
+    
+    // Vérifier si l'utilisateur existe
+    const existingUser = await get('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+    
+    // Vérifier si le nom d'utilisateur ou l'email est déjà utilisé par un autre utilisateur
+    if (username || email) {
+      const conflictUser = await get(
+        'SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?',
+        [username || '', email || '', userId]
+      );
+      if (conflictUser) {
+        return res.status(409).json({ error: 'Un utilisateur avec ce nom ou cet email existe déjà' });
+      }
+    }
+    
+    // Mettre à jour l'utilisateur
+    const updates = [];
+    const params = [];
+    
+    if (username) {
+      updates.push('username = ?');
+      params.push(username);
+    }
+    if (email) {
+      updates.push('email = ?');
+      params.push(email);
+    }
+    if (role) {
+      updates.push('role = ?');
+      params.push(role);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Aucune donnée à mettre à jour' });
+    }
+    
+    params.push(userId);
+    await run(`
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `, params);
+    
+    // Retourner l'utilisateur mis à jour
+    const updatedUser = await get(`
+      SELECT id, username, email, role, created_at, last_login
+      FROM users
+      WHERE id = ?
+    `, [userId]);
+    
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/users/:id - Supprimer un utilisateur
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const userId = req.params.id;
+    
+    // Vérifier si l'utilisateur existe
+    const existingUser = await get('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+    
+    // Supprimer l'utilisateur
+    await run('DELETE FROM users WHERE id = ?', [userId]);
+    
+    res.json({ message: 'Utilisateur supprimé avec succès' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/users/:id/password - Changer le mot de passe
+app.put('/api/users/:id/password', async (req, res) => {
+  try {
+    const { password } = req.body;
+    const userId = req.params.id;
+    
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères' });
+    }
+    
+    // Vérifier si l'utilisateur existe
+    const existingUser = await get('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+    
+    // Hasher le nouveau mot de passe
+    const passwordHash = await hashPassword(password);
+    
+    // Mettre à jour le mot de passe
+    await run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
+    
+    res.json({ message: 'Mot de passe modifié avec succès' });
+  } catch (error) {
+    console.error('Error changing password:', error);
     res.status(500).json({ error: error.message });
   }
 });
