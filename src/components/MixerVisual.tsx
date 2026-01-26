@@ -76,15 +76,10 @@ export default function MixerVisual({ mixer, size = 'medium' }: MixerVisualProps
         </span>
       </div> */}
 
-      {/* Informations en bas - Retiré pour enlever le texte en noir sur les images */}
-      {/* <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
+      {/* Nom du malaxeur en bas */}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
         <div className="text-white text-sm font-medium">{mixer.name}</div>
-        {mixer.recipe && (
-          <div className="text-white/80 text-xs">
-            {mixer.recipe.name} - Étape {mixer.currentStep}/{mixer.recipe.steps.length}
-          </div>
-        )}
-      </div> */}
+      </div>
     </div>
   );
 }
