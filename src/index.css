@@ -3,14 +3,30 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
     @apply bg-gray-50 text-gray-900;
+    @apply min-h-screen;
+    /* Empêcher le zoom sur les inputs sur iOS */
+    font-size: 16px;
+  }
+  /* Zone safe pour les encoches sur mobile (iPhone X+, etc.) - uniquement sur petits écrans */
+  @media (max-width: 768px) {
+    @supports (padding: env(safe-area-inset-bottom)) {
+      body {
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+    }
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-lg shadow-md p-6;
+    @apply bg-white rounded-lg shadow-md p-4 sm:p-5 md:p-6;
   }
   
   .btn-primary {

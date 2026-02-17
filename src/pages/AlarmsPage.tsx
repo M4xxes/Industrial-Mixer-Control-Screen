@@ -134,7 +134,7 @@ export default function AlarmsPage() {
   const criticalAlarms = alarms.filter(a => a.level === 'Critique' && a.status === 'Active');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900">Alarmes</h1>
         {activeAlarms.length > 0 && (
@@ -146,7 +146,7 @@ export default function AlarmsPage() {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="card">
           <div className="text-sm text-gray-600">Alarmes actives</div>
           <div className="text-2xl font-bold text-red-600">{activeAlarms.length}</div>
@@ -164,7 +164,7 @@ export default function AlarmsPage() {
       {/* Filtres */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Filtres</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Malaxeur

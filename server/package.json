@@ -8,7 +8,8 @@
     "init-db": "node init-db.js",
     "import-mysql": "node import-mysql.js",
     "create-tables": "node create-missing-tables.js",
-    "test-connection": "node test-connection.js"
+    "test-connection": "node test-connection.js",
+    "copy-db-carlos": "node copy-db-carlos.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

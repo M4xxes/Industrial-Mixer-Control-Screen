@@ -106,9 +106,9 @@ export default function BatchHistoryDialog({ batchId, onClose }: BatchHistoryDia
   const totalActualWeight = batch?.steps?.reduce((sum, s) => sum + (s.actualWeight || 0), 0) || 0;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-7xl max-h-[95vh] w-full overflow-auto">
-        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-lg max-w-7xl max-h-[95dvh] sm:max-h-[95vh] w-full overflow-auto">
+        <div className="sticky top-0 bg-white border-b p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <div>
             <h2 className="text-xl font-semibold">{batch?.batchNumber || 'N/A'}</h2>
             <p className="text-sm text-gray-600">{batch?.recipeName || 'N/A'}</p>
@@ -132,7 +132,7 @@ export default function BatchHistoryDialog({ batchId, onClose }: BatchHistoryDia
 
         <div className="p-6 space-y-6">
           {/* Résumé des performances */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
             <div className="card">
               <div className="text-sm text-gray-600">Poids total prévu</div>
               <div className="text-2xl font-bold">{totalPlannedWeight.toFixed(2)} Kg</div>

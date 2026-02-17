@@ -62,6 +62,7 @@ app.get('/', (req, res) => {
         etapesExecution: '/api/etapes-execution',
         users: '/api/users',
         ingredients: '/api/ingredients',
+        manualWeights: '/api/manual-weights',
       },
   });
 });
@@ -847,6 +848,57 @@ app.put('/api/batches/:id/distribution', async (req, res) => {
     
     const updated = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [req.params.id]);
     res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== MANUAL WEIGHTS (Balance manuel) API ==========
+
+// GET /api/manual-weights - Liste des pesées manuelles (optionnel: ?product=xxx)
+app.get('/api/manual-weights', async (req, res) => {
+  try {
+    const product = req.query.product;
+    let rows;
+    if (product) {
+      rows = await all(
+        'SELECT id, product_name, weight_kg, sequence_num, created_at FROM manual_weights WHERE product_name = ? ORDER BY created_at DESC',
+        [product]
+      );
+    } else {
+      rows = await all(
+        'SELECT id, product_name, weight_kg, sequence_num, created_at FROM manual_weights ORDER BY created_at DESC'
+      );
+    }
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/manual-weights - Enregistrer des pesées manuelles (une ou plusieurs)
+app.post('/api/manual-weights', async (req, res) => {
+  try {
+    const { entries } = req.body;
+    if (!Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({ error: 'Body must contain an array "entries" with at least one item' });
+    }
+    const inserted = [];
+    for (const e of entries) {
+      const productName = e.product_name ?? e.productName ?? '';
+      const weightKg = parseFloat(e.weight_kg ?? e.weight ?? 0);
+      const sequenceNum = parseInt(e.sequence_num ?? e.sequence ?? 1, 10);
+      if (!productName || isNaN(weightKg) || weightKg <= 0) {
+        continue;
+      }
+      await run(
+        'INSERT INTO manual_weights (product_name, weight_kg, sequence_num) VALUES (?, ?, ?)',
+        [productName.trim(), weightKg, sequenceNum]
+      );
+      const row = await get('SELECT id, product_name, weight_kg, sequence_num, created_at FROM manual_weights WHERE id = last_insert_rowid()');
+      if (row) inserted.push(row);
+    }
+    res.status(201).json({ saved: inserted.length, entries: inserted });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

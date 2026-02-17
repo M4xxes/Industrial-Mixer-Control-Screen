@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { inventoryAPI, alarmsAPI, batchesAPI } from '../services/api';
 import { Inventory, Alarm, Batch } from '../types';
 import MixerVisual from '../components/MixerVisual';
-import { Package, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Package, AlertTriangle, TrendingUp, RotateCcw } from 'lucide-react';
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
@@ -15,7 +15,14 @@ export default function Dashboard() {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
-  const lastPathRef = useRef<string>(''); // Pour éviter les scrolls multiples sur la même route
+  const lastPathRef = useRef<string>('');
+  // Base de remise à zéro des quantités consommées (soustraite à l'affichage)
+  const [consumptionResetBaseline, setConsumptionResetBaseline] = useState<{
+    D10: number;
+    D200: number;
+    Huile: number;
+    Poudres: number;
+  } | null>(null); // Pour éviter les scrolls multiples sur la même route
 
   // Rediriger si pas admin
   if (!isAdmin()) {
@@ -125,14 +132,29 @@ export default function Dashboard() {
   const consumptionHuile = getConsumptionByProduct('Huile HM');
   const consumptionPoudres = getConsumptionByProduct('Hydrocarb');
 
+  const displayD10 = consumptionResetBaseline ? Math.max(0, consumptionD10 - consumptionResetBaseline.D10) : consumptionD10;
+  const displayD200 = consumptionResetBaseline ? Math.max(0, consumptionD200 - consumptionResetBaseline.D200) : consumptionD200;
+  const displayHuile = consumptionResetBaseline ? Math.max(0, consumptionHuile - consumptionResetBaseline.Huile) : consumptionHuile;
+  const displayPoudres = consumptionResetBaseline ? Math.max(0, consumptionPoudres - consumptionResetBaseline.Poudres) : consumptionPoudres;
+
+  const handleResetConsumption = () => {
+    if (!confirm('Remettre à zéro les quantités consommées affichées ? Les valeurs actuelles deviendront la nouvelle base.')) return;
+    setConsumptionResetBaseline({
+      D10: consumptionD10,
+      D200: consumptionD200,
+      Huile: consumptionHuile,
+      Poudres: consumptionPoudres,
+    });
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Vue d'ensemble</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <h1 className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-900">Vue d'ensemble</h1>
       </div>
 
       {/* Statistiques globales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="card">
           <div className="flex items-center justify-between">
             <div>
@@ -194,48 +216,41 @@ export default function Dashboard() {
       )}
 
       {/* Consommation par produit */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">D10</p>
-              <p className="text-2xl font-bold text-gray-900">{consumptionD10.toFixed(2)} Kg</p>
-            </div>
-          </div>
+      <div className="card">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Consommation des produits</h2>
+          <button
+            onClick={handleResetConsumption}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+          >
+            <RotateCcw className="w-4 h-4" />
+            Remettre à zéro les quantités
+          </button>
         </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">D200</p>
-              <p className="text-2xl font-bold text-gray-900">{consumptionD200.toFixed(2)} Kg</p>
-            </div>
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">D10</p>
+            <p className="text-2xl font-bold text-gray-900">{displayD10.toFixed(2)} Kg</p>
           </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Huile minérale</p>
-              <p className="text-2xl font-bold text-gray-900">{consumptionHuile.toFixed(2)} Kg</p>
-            </div>
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">D200</p>
+            <p className="text-2xl font-bold text-gray-900">{displayD200.toFixed(2)} Kg</p>
           </div>
-        </div>
-
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Poudres</p>
-              <p className="text-2xl font-bold text-gray-900">{consumptionPoudres.toFixed(2)} Kg</p>
-            </div>
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">Huile minérale</p>
+            <p className="text-2xl font-bold text-gray-900">{displayHuile.toFixed(2)} Kg</p>
+          </div>
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-600">Poudres</p>
+            <p className="text-2xl font-bold text-gray-900">{displayPoudres.toFixed(2)} Kg</p>
           </div>
         </div>
       </div>
 
       {/* Grille des malaxeurs */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Malaxeurs</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Malaxeurs</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {mixers.map((mixer) => {
             const batch = batches.find(b => b.mixerId === mixer.id && (b.status === 'En cours' || b.status === 'Terminé'));
             // Déterminer la route de production selon le nom du malaxeur (plus fiable que l'ID)

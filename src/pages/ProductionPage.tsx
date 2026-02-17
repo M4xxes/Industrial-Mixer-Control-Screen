@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { useMixers } from '../hooks/useMixers';
 import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI } from '../services/api';
 import { Recipe, Alarm, Batch, EtapesExecution } from '../types';
-import { Play, Square, Check, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Square, Check, AlertTriangle, ChevronDown, ChevronUp, Hand, X, Power, Thermometer, Gauge, RotateCcw, Settings } from 'lucide-react';
+import MixerVisual from '../components/MixerVisual';
 
 export default function ProductionPage() {
   const { pair } = useParams<{ pair: string }>();
+  const { isAdmin } = useAuth();
   const { mixers, loading: mixersLoading, error: mixersError } = useMixers();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [alarms, setAlarms] = useState<Alarm[]>([]);
@@ -21,7 +24,48 @@ export default function ProductionPage() {
   const [hasError, setHasError] = useState(false);
   const fetchingRef = useRef(false); // Pour éviter les requêtes multiples simultanées
   const [showSteps, setShowSteps] = useState<{ [key: number]: boolean }>({}); // État pour afficher/masquer les étapes par malaxeur
-  
+
+  // Fenêtres Mode manuel : plusieurs possibles, déplaçables (position x,y par fenêtre)
+  type ManualModeWindow = { id: string; singleMixerId: number | null; x: number; y: number };
+  const [manualModeWindows, setManualModeWindows] = useState<ManualModeWindow[]>([]);
+  const manualModeDragRef = useRef<{ id: string; startX: number; startY: number; startLeft: number; startTop: number } | null>(null);
+  const [manualSelectedMixerId1, setManualSelectedMixerId1] = useState<number | null>(null);
+  const [manualSelectedMixerId2, setManualSelectedMixerId2] = useState<number | null>(null);
+  const [manualConsignes, setManualConsignes] = useState<Record<number, Record<string, { total: string; dose: string }>>>({});
+  const [dosageConfirm, setDosageConfirm] = useState<{
+    open: boolean;
+    mixerId: number;
+    productName: string;
+    total: string;
+    dose: string;
+  } | null>(null);
+  const [poidsBascule, setPoidsBascule] = useState<Record<number, number>>({});
+  const [batchNumberManual, setBatchNumberManual] = useState<Record<number, string>>({});
+
+  // Ouvrir une fenêtre Mode manuel (plusieurs possibles, positions décalées)
+  const openManualModeWindow = (singleMixerId: number | null) => {
+    setManualModeWindows(prev => {
+      const n = prev.length;
+      return [...prev, { id: `manual-${Date.now()}-${Math.random().toString(36).slice(2)}`, singleMixerId, x: 40 + n * 50, y: 40 + n * 45 }];
+    });
+    if (singleMixerId != null) setManualSelectedMixerId1(singleMixerId);
+  };
+  const closeManualModeWindow = (id: string) => {
+    setManualModeWindows(prev => prev.filter(w => w.id !== id));
+  };
+
+  // Drag des fenêtres Mode manuel (écoute globale)
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!manualModeDragRef.current) return;
+      const { id, startX, startY, startLeft, startTop } = manualModeDragRef.current;
+      setManualModeWindows(prev => prev.map(w => w.id !== id ? w : { ...w, x: Math.max(0, startLeft + (e.clientX - startX)), y: Math.max(0, startTop + (e.clientY - startY)) }));
+    };
+    const onUp = () => { manualModeDragRef.current = null; };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+  }, []);
 
   // Déterminer les IDs des malaxeurs selon la paire (mémorisé pour éviter les re-renders)
   const mixerIds = useMemo(() => {
@@ -73,6 +117,49 @@ export default function ProductionPage() {
     return filtered;
   }, [mixers, mixerIds, pair]);
 
+  // Afficher automatiquement les étapes si une recette est en cours
+  useEffect(() => {
+    // Attendre que les mixers soient chargés
+    if (mixersLoading) return;
+    
+    // Utiliser un délai pour s'assurer que mixer.recipe est bien chargé après le reload
+    const timeout = setTimeout(() => {
+      displayedMixers.forEach((mixer) => {
+        if (mixer && mixer.recipe && mixer.status === 'Production') {
+          setShowSteps(prev => {
+            // Toujours afficher les étapes si une recette est en cours
+            if (prev[mixer.id] !== true) {
+              return { ...prev, [mixer.id]: true };
+            }
+            return prev;
+          });
+        }
+      });
+    }, 300); // Délai un peu plus long pour s'assurer que mixer.recipe est chargé
+    
+    return () => clearTimeout(timeout);
+  }, [displayedMixers, mixersLoading]);
+  
+  // Vérifier aussi après le chargement des recettes
+  useEffect(() => {
+    if (mixersLoading || recipes.length === 0) return;
+    
+    const timeout = setTimeout(() => {
+      displayedMixers.forEach((mixer) => {
+        if (mixer && mixer.recipe && mixer.status === 'Production') {
+          setShowSteps(prev => {
+            if (prev[mixer.id] !== true) {
+              return { ...prev, [mixer.id]: true };
+            }
+            return prev;
+          });
+        }
+      });
+    }, 500);
+    
+    return () => clearTimeout(timeout);
+  }, [displayedMixers, mixersLoading, recipes.length]);
+
   // Gérer l'affichage du chargement avec timeout
   useEffect(() => {
     // Si les mixers sont chargés, on peut afficher
@@ -109,6 +196,14 @@ export default function ProductionPage() {
   //     });
   //   }
   // }, [pair]);
+
+  // Initialiser les malaxeurs du mode manuel (popup) quand les mixers sont chargés
+  useEffect(() => {
+    if (mixers.length > 0) {
+      if (manualSelectedMixerId1 == null) setManualSelectedMixerId1(mixers[0].id);
+      if (manualSelectedMixerId2 == null && mixers.length > 1) setManualSelectedMixerId2(mixers[1].id);
+    }
+  }, [mixers, manualSelectedMixerId1, manualSelectedMixerId2]);
 
   // Scroll uniquement au changement de paire, pas à chaque rafraîchissement
   useEffect(() => {
@@ -378,18 +473,220 @@ export default function ProductionPage() {
     );
   }
 
+  // Rendu d'une colonne du popup Mode manuel (gauche ou droite). Si fixedMixerId est défini, pas de sélecteur de malaxeur.
+  const renderManualModeColumn = (mixer: typeof mixers[0] | null | undefined, mixerNumber: 1 | 2, fixedMixerId?: number | null) => {
+    const isFixed = fixedMixerId != null;
+    const selectedMixerId = isFixed ? fixedMixerId : (mixerNumber === 1 ? manualSelectedMixerId1 : manualSelectedMixerId2);
+    const setSelectedMixerId = mixerNumber === 1 ? setManualSelectedMixerId1 : setManualSelectedMixerId2;
+
+    const getCurrentBatch = (mixerId: number) =>
+      batches.find(b => b.mixerId === mixerId && (b.status === 'En cours' || b.status === 'Terminé'));
+    const getDistribution = (batch?: Batch) => {
+      if (!batch?.distribution?.length) {
+        return [
+          { productName: 'Hydrocarb', qteFormule: 0, qteDosee: 0, dose: 0 },
+          { productName: 'Napvis D10', qteFormule: 0, qteDosee: 0, dose: 0 },
+          { productName: 'Napvis D200', qteFormule: 0, qteDosee: 0, dose: 0 },
+          { productName: 'Huile HM', qteFormule: 0, qteDosee: 0, dose: 0 },
+        ];
+      }
+      const productOrder = ['Hydrocarb', 'Napvis D10', 'Napvis D200', 'Huile HM'];
+      const map = new Map(batch.distribution.map((d: any) => [d.productName, d]));
+      return productOrder.map(name => map.get(name) || { productName: name, qteFormule: 0, qteDosee: 0, dose: 0 });
+    };
+    const getProductData = (productName: string, batch: Batch | undefined, distribution: any[]) => {
+      const item = distribution.find((d: any) => {
+        if (productName === 'HYDROCARB') return d.productName === 'Hydrocarb';
+        if (productName === 'D10') return d.productName === 'Napvis D10';
+        if (productName === 'D200') return d.productName === 'Napvis D200';
+        if (productName === 'HUILE MINERALE') return d.productName === 'Huile HM';
+        return false;
+      });
+      return item || { productName: productName, qteFormule: 0, qteDosee: 0, dose: 0 };
+    };
+    const formatWeight = (value: number | null | undefined) => (value == null ? '0.0' : value.toFixed(1));
+
+    return (
+      <div className="space-y-6" style={{ fontSize: 'clamp(12px, 1.5vw, 16px)' }}>
+        <div className="card">
+          <label className="block text-sm font-medium text-gray-700 mb-2">N° Lot</label>
+          <input
+            type="text"
+            value={selectedMixerId != null ? (batchNumberManual[selectedMixerId] ?? '') : ''}
+            onChange={(e) => selectedMixerId != null && setBatchNumberManual((prev) => ({ ...prev, [selectedMixerId]: e.target.value }))}
+            placeholder="Numéro de lot"
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+        {!isFixed && (
+          <div className="card">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sélectionner un malaxeur {mixerNumber === 1 ? '(Gauche)' : '(Droite)'}</label>
+            <select
+              value={selectedMixerId ?? ''}
+              onChange={(e) => setSelectedMixerId(parseInt(e.target.value) || null)}
+              className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">-- Sélectionner --</option>
+              {mixers.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {mixer && (
+          <>
+            <div className="card">
+              <div className="flex justify-between items-center border-b pb-3 mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">{mixer.name}</h2>
+                <span className={`px-3 py-1 rounded text-sm font-semibold ${
+                  mixer.status === 'Production' ? 'bg-green-100 text-green-800' :
+                  mixer.status === 'Pause' ? 'bg-yellow-100 text-yellow-800' :
+                  mixer.status === 'Alarme' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                }`}>{mixer.status}</span>
+              </div>
+              <MixerVisual mixer={mixer} size="medium" />
+            </div>
+            <div className="card space-y-4">
+              <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Données temps réel</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><Thermometer className="w-4 h-4" /> Température</div>
+                  <div className="text-2xl font-bold text-gray-900">{mixer.temperature.toFixed(1)}°C</div>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><Gauge className="w-4 h-4" /> Pression</div>
+                  <div className="text-2xl font-bold text-gray-900">{mixer.pressure.toFixed(1)} bar</div>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><RotateCcw className="w-4 h-4" /> Vitesse</div>
+                  <div className="text-2xl font-bold text-gray-900">{mixer.speed} tr/min</div>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><Power className="w-4 h-4" /> Intensité</div>
+                  <div className="text-2xl font-bold text-gray-900">{mixer.power.toFixed(1)} A</div>
+                </div>
+              </div>
+              <div className="border-t pt-4">
+                <h3 className="font-semibold text-gray-900 mb-2">État des moteurs</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-sm text-gray-600">Bras:</span>
+                    <span className={`ml-2 px-2 py-1 rounded text-sm font-medium ${
+                      mixer.motorArm === 'Marche' ? 'bg-green-100 text-green-800' :
+                      mixer.motorArm === 'Défaut' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                    }`}>{mixer.motorArm}</span>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Vis:</span>
+                    <span className={`ml-2 px-2 py-1 rounded text-sm font-medium ${
+                      mixer.motorScrew === 'Marche' ? 'bg-green-100 text-green-800' :
+                      mixer.motorScrew === 'Défaut' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                    }`}>{mixer.motorScrew}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 text-center border-b pb-3">DOSAGES MANUELS {mixer.name.toUpperCase()}</h2>
+              {(['HYDROCARB', 'D10', 'D200', 'HUILE MINERALE'] as const).map((productName) => {
+                const batch = getCurrentBatch(mixer.id);
+                const distribution = getDistribution(batch);
+                const data = getProductData(productName, batch, distribution);
+                const csgTotal = data.qteFormule || 0;
+                const csgDose = data.dose || 0;
+                const poidsDose = data.qteDosee || 0;
+                const poidsRest = Math.max(0, csgTotal - poidsDose);
+                const basculeValue = poidsBascule[mixer.id] ?? 0;
+                const key = productName.replace(' ', '_');
+                const cs = manualConsignes[mixer.id]?.[key] ?? { total: String(csgTotal), dose: String(csgDose) };
+                return (
+                  <div key={productName} className="border-b pb-4 mb-4 last:border-b-0 last:mb-0">
+                    <h4 className="text-md font-semibold text-gray-900 mb-3">DISTRIBUTION {productName}</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <label className="block text-gray-700 mb-1">Consigne total (kg)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={cs.total}
+                            onChange={(e) => setManualConsignes((prev) => ({
+                              ...prev,
+                              [mixer.id]: { ...(prev[mixer.id] ?? {}), [key]: { ...(prev[mixer.id]?.[key] ?? { total: '', dose: '' }), total: e.target.value } },
+                            }))}
+                            className="w-full border border-gray-300 rounded px-2 py-1.5 text-gray-900"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-gray-700 mb-1">Consigne dose (kg)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            value={cs.dose}
+                            onChange={(e) => setManualConsignes((prev) => ({
+                              ...prev,
+                              [mixer.id]: { ...(prev[mixer.id] ?? {}), [key]: { ...(prev[mixer.id]?.[key] ?? { total: '', dose: '' }), dose: e.target.value } },
+                            }))}
+                            className="w-full border border-gray-300 rounded px-2 py-1.5 text-gray-900"
+                          />
+                        </div>
+                        <div className="flex justify-between pt-1 border-t"><span className="text-gray-700">Poids Dosé:</span><span className="font-medium">{formatWeight(poidsDose)} kg</span></div>
+                        <div className="flex justify-between"><span className="text-gray-700">Poids Rest:</span><span className="font-medium">{formatWeight(poidsRest)} kg</span></div>
+                        <div className="flex justify-between"><span className="text-gray-700">Poids Bascule:</span><span className="font-medium">{formatWeight(basculeValue)} kg</span></div>
+                      </div>
+                      <div className="flex flex-col justify-start">
+                        <div className="grid grid-cols-2 gap-2">
+                          <button type="button" onClick={() => setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose })} className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">DOSAGE</button>
+                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">REMPLISSAGE</button>
+                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">INITIALISATION</button>
+                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600">AUTO</button>
+                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2">MANU</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="card border-primary-200 bg-primary-50/30">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2"><Settings className="w-5 h-5 text-primary-600" /> Maintenance malaxeur</h3>
+              <p className="text-sm text-gray-600 mb-3">Pour faire un dosage manuel tout en consultant les paramètres et le suivi dosages, ouvrez la page Maintenance.</p>
+              <Link to="/maintenance" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">
+                <Settings className="w-4 h-4" /> Ouvrir Maintenance (nouvel onglet)
+              </Link>
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Suivi maintenance - Dosages</h4>
+                <p className="text-xs text-gray-500 italic">À afficher depuis la page Maintenance ou API dédiée.</p>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // TOUJOURS afficher le contenu principal, même si les malaxeurs ne sont pas trouvés
   // Cela garantit qu'il y a toujours quelque chose à l'écran
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Production - {pair?.replace('B', 'BUTYL') || pair}</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col xs:flex-row justify-between items-start xs:items-center gap-2">
+        <h1 className="text-xl xs:text-2xl sm:text-3xl font-bold text-gray-900">Production - {pair?.replace('B', 'BUTYL') || pair}</h1>
+        {isAdmin() && (
+          <button
+            type="button"
+            onClick={() => openManualModeWindow(null)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700"
+          >
+            <Hand className="w-5 h-5" />
+            Mode manuel (tous)
+          </button>
+        )}
       </div>
 
       {activeTab === 'production' && (
-        <>
-              {/* Affichage des deux malaxeurs */}
-      {displayedMixers.length === 0 ? (
+        displayedMixers.length === 0 ? (
         <div className="card text-center py-8">
           <div className="max-w-3xl mx-auto">
             <div className="mb-4">
@@ -502,7 +799,7 @@ export default function ProductionPage() {
             </div>
           )}
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ fontSize: 'clamp(12px, 1.2vw, 16px)' }}>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6" style={{ fontSize: 'clamp(12px, 1.5vw, 16px)' }}>
           {displayedMixers.map((mixer) => {
           if (!mixer) return null;
           
@@ -519,29 +816,40 @@ export default function ProductionPage() {
             : null;
 
           return (
-            <div key={mixer.id} className="card space-y-4">
+            <div key={mixer.id} className="card space-y-3 sm:space-y-4">
               {/* En-tête avec nom malaxeur */}
-              <div className="flex justify-between items-center border-b pb-3">
-                <h2 className="text-2xl font-bold text-gray-900">{mixer.name}</h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleDefaut(mixer.id)}
-                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium"
-                  >
-                    DEFAUT
-                  </button>
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b pb-3">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{mixer.name}</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Voyants ronds uniquement */}
+                  <div className="flex items-center gap-3" title="Défaut">
+                    <div
+                      className={`w-4 h-4 rounded-full shrink-0 ${
+                        mixerAlarms.length > 0 ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-red-300'
+                      }`}
+                    />
+                    <span className="text-xs font-medium text-gray-700">Défaut</span>
+                  </div>
+                  <div className="flex items-center gap-1.5" title="Appel opérateur">
+                    <div className="w-4 h-4 rounded-full shrink-0 bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]" />
+                    <span className="text-xs font-medium text-gray-700">Appel opérateur</span>
+                  </div>
                   <button
                     onClick={() => handleAcquitDefauts(mixer.id)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+                    className="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs sm:text-sm font-medium"
                   >
                     ACQUIT DEFAUTS
                   </button>
-                  <button
-                    onClick={() => handleAppelOperateur(mixer.id)}
-                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium"
-                  >
-                    APPEL OPERATEUR
-                  </button>
+                  {isAdmin() && (
+                    <button
+                      type="button"
+                      onClick={() => openManualModeWindow(mixer.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-primary-600 text-white rounded hover:bg-primary-700 text-xs sm:text-sm font-medium"
+                    >
+                      <Hand className="w-4 h-4" />
+                      Mode manuel
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -579,7 +887,7 @@ export default function ProductionPage() {
               </div>
 
               {/* Boutons de commande */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 xs:grid-cols-3 gap-2">
                 <button
                   onClick={() => handleStartRecipe(mixer.id)}
                   disabled={mixer.status === 'Production'}
@@ -772,13 +1080,17 @@ export default function ProductionPage() {
                     <p className="mb-2">Aucune recette sélectionnée</p>
                     <p className="text-sm">Sélectionnez une recette dans le menu déroulant ci-dessus pour voir les étapes</p>
                   </div>
-                ) : !showSteps[mixer.id] ? (
+                ) : !showSteps[mixer.id] && mixer.status !== 'Production' ? (
                   <div className="text-center py-4 text-gray-500">
-                    <p className="text-sm">Cliquez sur "Afficher les détails" pour voir les {activeRecipe.steps?.length || 0} étapes de la recette</p>
+                    <p className="text-sm mb-2">Cliquez sur "Afficher les détails" pour voir les {activeRecipe.steps?.length || 0} étapes de la recette</p>
+                  </div>
+                ) : mixer.status === 'Production' && mixer.recipe && !showSteps[mixer.id] ? (
+                  <div className="text-center py-4 text-blue-600">
+                    <p className="text-sm">Chargement des étapes...</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto max-h-64 sm:max-h-80 md:max-h-96 overflow-y-auto -mx-2 sm:mx-0">
+                    <table className="w-full text-xs sm:text-sm min-w-[600px]">
                       <thead className="bg-gray-50 sticky top-0">
                         <tr className="border-b">
                           <th className="text-left p-2">Étape</th>
@@ -922,8 +1234,89 @@ export default function ProductionPage() {
         })}
         </div>
         </>
-      )}
-        </>
+      ) )}
+
+      {/* Fenêtres Mode manuel : déplaçables, plusieurs possibles */}
+      {manualModeWindows.map((win, index) => (
+        <div
+          key={win.id}
+          className="fixed bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+          style={{
+            left: win.x,
+            top: win.y,
+            width: win.singleMixerId != null ? 'min(580px, 95vw)' : 'min(1150px, 95vw)',
+            maxHeight: '90vh',
+            zIndex: 50 + index,
+          }}
+        >
+          {/* Barre de titre : zone de drag + fermer */}
+          <div
+            className="flex items-center justify-between px-4 py-3 bg-primary-600 text-white cursor-grab active:cursor-grabbing select-none border-b border-primary-700"
+            onMouseDown={(e) => {
+              if ((e.target as HTMLElement).closest('button')) return;
+              manualModeDragRef.current = { id: win.id, startX: e.clientX, startY: e.clientY, startLeft: win.x, startTop: win.y };
+            }}
+          >
+            <h2 className="text-lg font-bold truncate pr-2">
+              Mode manuel
+              {win.singleMixerId != null && (() => {
+                const m = mixers.find(mx => mx.id === win.singleMixerId!);
+                return m ? ` – ${m.name}` : '';
+              })()}
+            </h2>
+            <button
+              type="button"
+              onClick={() => closeManualModeWindow(win.id)}
+              className="p-1.5 rounded hover:bg-primary-700 text-white shrink-0"
+              aria-label="Fermer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          {/* Contenu scrollable */}
+          <div className={`overflow-y-auto flex-1 p-4 ${win.singleMixerId != null ? 'grid grid-cols-1' : 'grid grid-cols-1 xl:grid-cols-2 gap-4'}`} style={{ minHeight: 440 }}>
+            {win.singleMixerId != null ? (
+              renderManualModeColumn(mixers.find(m => m.id === win.singleMixerId!) ?? null, 1, win.singleMixerId)
+            ) : (
+              <>
+                {renderManualModeColumn(mixers.find(m => m.id === manualSelectedMixerId1) ?? null, 1)}
+                {renderManualModeColumn(mixers.find(m => m.id === manualSelectedMixerId2) ?? null, 2)}
+              </>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Pop-up de validation dosage (au-dessus du modal) */}
+      {dosageConfirm?.open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Confirmer le dosage</h3>
+              <button type="button" onClick={() => setDosageConfirm(null)} className="text-gray-500 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-2">Produit : <strong>{dosageConfirm.productName}</strong></p>
+            <p className="text-sm text-gray-600 mb-2">Consigne total : <strong>{dosageConfirm.total} kg</strong></p>
+            <p className="text-sm text-gray-600 mb-4">Consigne dose : <strong>{dosageConfirm.dose} kg</strong></p>
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setDosageConfirm(null)} className="px-4 py-2 border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  alert(`Dosage validé : ${dosageConfirm.productName} - Total ${dosageConfirm.total} kg, Dose ${dosageConfirm.dose} kg`);
+                  setDosageConfirm(null);
+                }}
+                className="px-4 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+              >
+                Valider le dosage
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

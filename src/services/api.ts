@@ -163,6 +163,22 @@ export const ingredientsAPI = {
   }),
 };
 
+// ========== MANUAL WEIGHTS (Balance manuel) API ==========
+
+export const manualWeightsAPI = {
+  getAll: (product?: string) => {
+    const query = product ? `?product=${encodeURIComponent(product)}` : '';
+    return fetchAPI(`/manual-weights${query}`);
+  },
+  save: (entries: Array<{ productName: string; weight: number; sequence: number }>) =>
+    fetchAPI('/manual-weights', {
+      method: 'POST',
+      body: JSON.stringify({
+        entries: entries.map((e) => ({ productName: e.productName, weight: e.weight, sequence: e.sequence })),
+      }),
+    }),
+};
+
 // ========== USERS API ==========
 
 export const usersAPI = {

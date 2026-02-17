@@ -218,7 +218,7 @@ export default function MaintenancePage() {
   const parameterCategories: ParameterCategory[] = [
     {
       id: 'B1-B2',
-      label: 'Malaxeurs B1/B2',
+      label: 'B1/B2 - D10 et Malaxeur',
       parameters: [
         { name: 'B12 Consigne Tempo DF FdC Vannes', address: '%MW1120' },
         { name: 'B12 Consigne Tempo DF Débit Huile', address: '%MW1121' },
@@ -253,7 +253,7 @@ export default function MaintenancePage() {
     },
     {
       id: 'B1-B2-D200',
-      label: 'B1/B2 - D200',
+      label: 'B1/B2 - D200 (dissocié D10)',
       parameters: [
         { name: 'B12 Consigne Tempo DF FdC Vannes D200', address: '%MW1140' },
         { name: 'B12 Consigne Tempo DF Remplissage D200', address: '%MW1141' },
@@ -282,7 +282,7 @@ export default function MaintenancePage() {
     },
     {
       id: 'B3-B5',
-      label: 'Malaxeurs B3/B5',
+      label: 'B3/B5 - D10 et Malaxeur',
       parameters: [
         { name: 'B35 Consigne Tempo DF FdC Vannes', address: '%MW1320' },
         { name: 'B35 Consigne Tempo DF Débit Huile', address: '%MW1321' },
@@ -319,7 +319,7 @@ export default function MaintenancePage() {
     },
     {
       id: 'B6-B7',
-      label: 'Malaxeurs B6/B7',
+      label: 'B6/B7 - D10 et Malaxeur',
       parameters: [
         { name: 'B67 Consigne Tempo DF FdC Vannes', address: '%MW1520' },
         { name: 'B67 Consigne Tempo DF Débit Huile', address: '%MW1521' },
@@ -621,11 +621,42 @@ export default function MaintenancePage() {
         </div>
       </div>
 
-      {/* Paramètres automates */}
+      {/* Suivi maintenance - Dosages (données ancienne supervision) */}
+      <div className="card">
+        <h2 className="text-xl font-semibold mb-4">Suivi maintenance - Dosages</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Données de suivi des dosages (D10, D200, Poudre, Huile) par malaxeur. Consignes et quantités dosées.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-gray-100 border">
+                <th className="border p-2 text-left">Malaxeur</th>
+                <th className="border p-2 text-left">Produit</th>
+                <th className="border p-2 text-right">Consigne (kg)</th>
+                <th className="border p-2 text-right">Dosé (kg)</th>
+                <th className="border p-2 text-left">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border">
+                <td colSpan={5} className="p-4 text-center text-gray-500 italic">
+                  Données à alimenter depuis l’API ou l’ancienne supervision (suivi dosages).
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Paramètres automates - D10 dissocié des malaxeurs dans les onglets */}
       <div className="card">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Paramètres automates</h2>
         </div>
+        <p className="text-xs text-gray-500 mb-3">
+          Onglets organisés pour dissocier D10 des malaxeurs (D10 et Malaxeur, D200, Poudre, etc.).
+        </p>
 
         {/* Onglets pour les catégories de paramètres */}
         <div className="border-b mb-4">

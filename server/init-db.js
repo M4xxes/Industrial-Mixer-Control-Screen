@@ -249,6 +249,19 @@ async function initDatabase() {
     await run(`CREATE INDEX IF NOT EXISTS idx_date_debut ON etapes_execution(date_debut)`);
     await run(`CREATE INDEX IF NOT EXISTS idx_statut ON etapes_execution(statut)`);
 
+    // Table manual_weights (pesées manuelles balance)
+    await run(`
+      CREATE TABLE IF NOT EXISTS manual_weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_name TEXT NOT NULL,
+        weight_kg REAL NOT NULL,
+        sequence_num INTEGER NOT NULL DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_manual_weights_product ON manual_weights(product_name)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_manual_weights_created ON manual_weights(created_at)`);
+
     console.log('Tables créées avec succès');
 
     // Insérer des données initiales

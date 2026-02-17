@@ -10,13 +10,13 @@ import {
   AlertTriangle, 
   History, 
   Package,
-  Hand,
   Factory,
   LogOut,
   User,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  Scale
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -32,7 +32,7 @@ export default function Layout({ children }: LayoutProps) {
   const navItems: Array<{ path: string; label: string; icon: any; roles: UserRole[] }> = [
     { path: '/', label: 'Vue d\'ensemble', icon: LayoutDashboard, roles: ['Admin'] },
     { path: '/recipes', label: 'Recettes', icon: BookOpen, roles: ['Admin'] },
-    { path: '/manual', label: 'Mode Manuel', icon: Hand, roles: ['Admin'] },
+    { path: '/balance-manuel', label: 'Balance manuel', icon: Scale, roles: ['Admin'] },
     // { path: '/inventory', label: 'Stocks', icon: Package, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] }, // Masqué temporairement
     { path: '/alarms', label: 'Alarmes', icon: AlertTriangle, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
     { path: '/history', label: 'Historique', icon: History, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
@@ -51,13 +51,13 @@ export default function Layout({ children }: LayoutProps) {
   const isProductionActive = location.pathname.startsWith('/production/');
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+    <div className="min-h-screen min-h-[100dvh] bg-gray-50">
+      <nav className="bg-white shadow-sm border-b sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
+        <div className="max-w-7xl mx-auto px-3 xs:px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16 min-h-[3.5rem]">
             {/* Logo */}
-            <div className="flex items-center flex-shrink-0">
-              <h1 className="text-lg sm:text-xl font-bold text-primary-600 whitespace-nowrap">
+            <div className="flex items-center flex-shrink-0 min-w-0">
+              <h1 className="text-base xs:text-lg sm:text-xl font-bold text-primary-600 truncate max-w-[180px] xs:max-w-none">
                 Supervision Multi-Malaxeurs
               </h1>
             </div>
@@ -207,7 +207,7 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
       </nav>
-      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-3 xs:py-4 sm:py-6 px-3 xs:px-4 sm:px-6 lg:px-8 pb-[env(safe-area-inset-bottom)]">
         {children}
       </main>
     </div>

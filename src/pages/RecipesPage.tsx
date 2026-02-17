@@ -213,6 +213,21 @@ export default function RecipesPage() {
     setFormData({ name: '', description: '', mixerId: undefined, mixerName: '', steps: [] });
   };
 
+  const handleDuplicateRecipe = (recipe: Recipe) => {
+    setEditingRecipe(null);
+    setFormData({
+      name: `Copie de ${recipe.name}`,
+      description: recipe.description || '',
+      mixerId: recipe.mixerId,
+      mixerName: recipe.mixerName || '',
+      steps: recipe.steps.map(s => ({
+        ...s,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      })),
+    });
+    setIsDialogOpen(true);
+  };
+
   const handleSave = async () => {
     if (!formData.name || !formData.steps || formData.steps.length === 0) {
       alert('Veuillez remplir tous les champs obligatoires');
@@ -454,8 +469,8 @@ export default function RecipesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h1 className="text-3xl font-bold text-gray-900">Gestion des Recettes et Ingrédients</h1>
         {activeTab === 'recipes' ? (
           <button
@@ -510,7 +525,7 @@ export default function RecipesPage() {
       {/* Carré nombre de recettes par malaxeur */}
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Nombre de recettes par malaxeur</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
           {mixers.map((mixer) => (
             <div key={mixer.id} className="text-center p-3 bg-gray-50 rounded-lg">
               <div className="text-sm text-gray-600">{mixer.name}</div>
@@ -579,8 +594,16 @@ export default function RecipesPage() {
                       <button
                         onClick={() => openDialog(recipe)}
                         className="text-primary-600 hover:text-primary-700 mr-2"
+                        title="Modifier"
                       >
                         <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicateRecipe(recipe)}
+                        className="text-gray-600 hover:text-gray-800"
+                        title="Dupliquer la recette"
+                      >
+                        Copie
                       </button>
                     </td>
                   </tr>
@@ -594,15 +617,23 @@ export default function RecipesPage() {
       {/* Visualisation de la recette sélectionnée */}
       {selectedRecipe && (
         <div className="card">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
             <h2 className="text-lg font-semibold">Visualisation: {selectedRecipe.name}</h2>
-            <button
-              onClick={() => openDialog(selectedRecipe)}
-              className="btn-primary text-sm"
-            >
-              <Edit className="w-4 h-4 inline mr-1" />
-              Modifier
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleDuplicateRecipe(selectedRecipe)}
+                className="btn-secondary text-sm"
+              >
+                Dupliquer
+              </button>
+              <button
+                onClick={() => openDialog(selectedRecipe)}
+                className="btn-primary text-sm"
+              >
+                <Edit className="w-4 h-4 inline mr-1" />
+                Modifier
+              </button>
+            </div>
           </div>
           <div className="mb-4">
             <p className="text-gray-600 mb-2">{selectedRecipe.description || 'Pas de description'}</p>
