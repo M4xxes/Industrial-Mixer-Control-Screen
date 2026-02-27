@@ -179,17 +179,16 @@ export const manualWeightsAPI = {
     }),
 };
 
-// ========== MANUAL COMMANDS (signaux automate) ==========
+// ========== AUTOMATE VARIABLES API ==========
 
-export const manualCommandsAPI = {
-  send: (tagName: string, mixerId?: number, value?: number | string, payload?: any) =>
-    fetchAPI('/manual-commands', {
+export const automateAPI = {
+  writeVariable: (variable: string, value: any = true, utilisateur?: string) =>
+    fetchAPI('/variable', {
       method: 'POST',
       body: JSON.stringify({
-        tag_name: tagName,
-        mixer_id: mixerId ?? null,
-        value: value ?? null,
-        payload: payload ?? null,
+        variable,
+        value,
+        utilisateur: utilisateur || 'supervision_web',
       }),
     }),
 };

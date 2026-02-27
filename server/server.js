@@ -47,6 +47,26 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+// Helper: envoyer une variable vers Node-RED / automate
+async function postAutomateVariable(variable, value, utilisateur = 'supervision_web') {
+  const url = 'http://localhost:1880/api/variable';
+  const payload = { variable, value, utilisateur };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`Erreur automate (${response.status}): ${response.statusText} ${text}`);
+  }
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
 // Route racine pour vérifier que le serveur fonctionne
 app.get('/', (req, res) => {
   res.json({
@@ -63,8 +83,26 @@ app.get('/', (req, res) => {
         users: '/api/users',
         ingredients: '/api/ingredients',
         manualWeights: '/api/manual-weights',
+        automateVariable: '/api/variable',
       },
   });
+});
+
+// ========== AUTOMATE VARIABLES API ==========
+
+// POST /api/variable - Proxy vers Node-RED http://localhost:1880/api/variable
+app.post('/api/variable', async (req, res) => {
+  const { variable, value, utilisateur } = req.body || {};
+  if (!variable || typeof variable !== 'string') {
+    return res.status(400).json({ error: 'Champ \"variable\" requis' });
+  }
+  try {
+    const result = await postAutomateVariable(variable, value ?? true, utilisateur || 'supervision_web');
+    res.json({ ok: true, variable, value: value ?? true, result });
+  } catch (error) {
+    console.error('Erreur lors de l\'appel automate:', error);
+    res.status(502).json({ error: 'Erreur lors de l\'écriture de la variable automate', message: error.message });
+  }
 });
 
 // ========== MIXERS API ==========
@@ -871,49 +909,6 @@ app.get('/api/manual-weights', async (req, res) => {
       );
     }
     res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== MANUAL COMMANDS (signaux pour l'automate) ==========
-
-// GET /api/manual-commands?since_id=123 - événements depuis un id donné (pour l'automate)
-app.get('/api/manual-commands', async (req, res) => {
-  try {
-    const sinceId = parseInt(req.query.since_id || '0', 10);
-    let rows;
-    if (sinceId > 0) {
-      rows = await all(
-        'SELECT id, tag_name, mixer_id, value, payload, created_at FROM manual_commands WHERE id > ? ORDER BY id ASC',
-        [sinceId]
-      );
-    } else {
-      rows = await all(
-        'SELECT id, tag_name, mixer_id, value, payload, created_at FROM manual_commands ORDER BY id DESC LIMIT 200'
-      );
-    }
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/manual-commands - enregistre un événement bouton/consigne
-app.post('/api/manual-commands', async (req, res) => {
-  try {
-    const { tag_name, mixer_id, value, payload } = req.body || {};
-    if (!tag_name || typeof tag_name !== 'string') {
-      return res.status(400).json({ error: 'tag_name is required' });
-    }
-    const val = value !== undefined && value !== null && value !== '' ? Number(value) : null;
-    const payloadText = payload !== undefined ? JSON.stringify(payload) : null;
-    await run(
-      'INSERT INTO manual_commands (tag_name, mixer_id, value, payload) VALUES (?, ?, ?, ?)',
-      [tag_name, mixer_id ?? null, val, payloadText]
-    );
-    const row = await get('SELECT id, tag_name, mixer_id, value, payload, created_at FROM manual_commands WHERE id = last_insert_rowid()');
-    res.status(201).json(row);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

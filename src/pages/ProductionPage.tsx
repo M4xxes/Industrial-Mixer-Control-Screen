@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useMixers } from '../hooks/useMixers';
-import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI, manualCommandsAPI } from '../services/api';
+import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI, automateAPI } from '../services/api';
 import { Recipe, Alarm, Batch, EtapesExecution } from '../types';
 import { Play, Square, Check, AlertTriangle, ChevronDown, ChevronUp, Hand, X, Power, Thermometer, Gauge, RotateCcw, Settings } from 'lucide-react';
 import MixerVisual from '../components/MixerVisual';
@@ -42,6 +42,42 @@ export default function ProductionPage() {
   const [poidsBascule, setPoidsBascule] = useState<Record<number, number>>({});
   const [batchNumberManual, setBatchNumberManual] = useState<Record<number, string>>({});
 
+  // Helpers variables automate
+  const getMixerCode = (mixerId: number): string => {
+    switch (mixerId) {
+      case 1: return 'B1';
+      case 2: return 'B2';
+      case 3: return 'B3';
+      case 5: return 'B5';
+      case 6: return 'B6';
+      case 7: return 'B7';
+      default: return `B${mixerId}`;
+    }
+  };
+
+  const getProductCodes = (productName: string): { product: string; razProduct: string } => {
+    switch (productName) {
+      case 'HYDROCARB':
+        return { product: 'Hydrocarb', razProduct: 'Hydrocarbure' };
+      case 'D10':
+        return { product: 'D10', razProduct: 'D10' };
+      case 'D200':
+        return { product: 'D200', razProduct: 'D200' };
+      case 'HUILE MINERALE':
+        return { product: 'Huile', razProduct: 'Huile' };
+      default:
+        return { product: productName, razProduct: productName };
+    }
+  };
+
+  const writeAutomateVariable = async (variable: string, value: any = true) => {
+    try {
+      await automateAPI.writeVariable(variable, value);
+    } catch (error) {
+      console.error('Erreur écriture variable automate', variable, error);
+    }
+  };
+
   // Ouvrir une fenêtre Mode manuel (plusieurs possibles, positions décalées)
   const openManualModeWindow = (singleMixerId: number | null) => {
     setManualModeWindows(prev => {
@@ -52,51 +88,6 @@ export default function ProductionPage() {
   };
   const closeManualModeWindow = (id: string) => {
     setManualModeWindows(prev => prev.filter(w => w.id !== id));
-  };
-
-  // Helpers pour construire les noms de tags automate
-  const getMixerTag = (mixerId: number) => `B${mixerId}`;
-  const getProductTag = (productName: string) => {
-    switch (productName) {
-      case 'HYDROCARB':
-        return 'Hydrocarb';
-      case 'D10':
-        return 'D10';
-      case 'D200':
-        return 'D200';
-      case 'HUILE MINERALE':
-        return 'Huile';
-      default:
-        return productName;
-    }
-  };
-  const getRazProductTag = (productName: string) => {
-    switch (productName) {
-      case 'HYDROCARB':
-        return 'Hydrocarbure';
-      case 'D10':
-        return 'D10';
-      case 'D200':
-        return 'D200';
-      case 'HUILE MINERALE':
-        return 'Huile';
-      default:
-        return productName;
-    }
-  };
-  const sendManualTag = (action: string, mixerId: number, productName?: string, value?: number | string, extraPayload?: any) => {
-    const mixerTag = getMixerTag(mixerId);
-    const productTag = productName ? getProductTag(productName) : undefined;
-    const tagName = productTag ? `${action}_${productTag}_${mixerTag}` : `${action}_${mixerTag}`;
-    return manualCommandsAPI.send(tagName, mixerId, value, extraPayload).catch(() => {
-      // ne pas bloquer l'IHM si l'API n'existe pas encore
-    });
-  };
-  const sendRazJeteeTag = (mixerId: number, productName: string) => {
-    const mixerTag = getMixerTag(mixerId);
-    const productTag = getRazProductTag(productName);
-    const tagName = `RAZ_Erreur_Jetee_${productTag}_${mixerTag}`;
-    return manualCommandsAPI.send(tagName, mixerId).catch(() => {});
   };
 
   // Drag des fenêtres Mode manuel (écoute globale)
@@ -358,12 +349,12 @@ export default function ProductionPage() {
     const batchNumber = batchNumberInput[mixerId] || `BATCH-${Date.now()}`;
     
     try {
-      sendManualTag('Depart_Cycle', mixerId);
       await mixersAPI.startRecipe(mixerId, {
         recipe_id: recipeId,
         operator_id: operatorName,
         batch_number: batchNumber,
       });
+      await writeAutomateVariable(`Depart_Cycle_${getMixerCode(mixerId)}`, true);
       window.location.reload();
     } catch (error) {
       console.error('Error starting recipe:', error);
@@ -375,8 +366,8 @@ export default function ProductionPage() {
     if (!confirm('Êtes-vous sûr de vouloir terminer la recette en cours ?')) return;
     
     try {
-      sendManualTag('Fin_Recette', mixerId);
       await mixersAPI.endRecipe(mixerId);
+      await writeAutomateVariable(`Fin_Recette_${getMixerCode(mixerId)}`, true);
       window.location.reload();
     } catch (error) {
       console.error('Error ending recipe:', error);
@@ -386,8 +377,8 @@ export default function ProductionPage() {
 
   const handleValidateStep = async (mixerId: number, stepNumber: number) => {
     try {
-      sendManualTag('Valider_Etape', mixerId);
       await mixersAPI.validateStep(mixerId, stepNumber);
+      await writeAutomateVariable(`Valider_Etape_${getMixerCode(mixerId)}`, true);
       window.location.reload();
     } catch (error) {
       console.error('Error validating step:', error);
@@ -404,10 +395,10 @@ export default function ProductionPage() {
     if (!confirm(`Êtes-vous sûr de vouloir acquitter tous les défauts du malaxeur ${mixerId} ?`)) return;
     
     try {
-      sendManualTag('Acquit_Defaut', mixerId);
       // Acquitter toutes les alarmes actives pour ce malaxeur
       const mixerAlarms = alarms.filter(a => a.mixerId === mixerId && a.status === 'Active');
       await Promise.all(mixerAlarms.map(a => alarmsAPI.acknowledge(a.id)));
+      await writeAutomateVariable(`Acquit_Defaut_${getMixerCode(mixerId)}`, true);
       alert('Défauts acquittés avec succès');
       window.location.reload();
     } catch (error) {
@@ -690,13 +681,17 @@ export default function ProductionPage() {
                     <div className="flex items-center gap-2 text-xs">
                       <span className="text-red-600 font-semibold">Erreur</span>
                       <button
-                        type="button"
-                        onClick={() => sendRazJeteeTag(mixer.id, productName)}
-                        className="px-2 py-1 rounded border border-blue-500 text-blue-600 text-xs font-semibold bg-white hover:bg-blue-50"
-                      >
-                        RAZ
-                      </button>
-                    </div>
+                          type="button"
+                          className="px-2 py-1 rounded border border-blue-500 text-blue-600 text-xs font-semibold bg-white hover:bg-blue-50"
+                          onClick={() => {
+                            const mixerCode = getMixerCode(mixer.id);
+                            const { razProduct } = getProductCodes(productName);
+                            writeAutomateVariable(`RAZ_Erreur_Jetee_${razProduct}_${mixerCode}`, true);
+                          }}
+                        >
+                          RAZ
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-3 text-sm">
@@ -752,12 +747,9 @@ export default function ProductionPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const totalNum = parseFloat(cs.total || '0');
-                              const doseNum = parseFloat(cs.dose || '0');
-                              // Consignes envoyées à l'automate
-                              sendManualTag('Consigne_Total', mixer.id, productName, totalNum);
-                              sendManualTag('Consigne_Dose', mixer.id, productName, doseNum);
-                              // Ouverture du popup de validation
+                              const mixerCode = getMixerCode(mixer.id);
+                              const { product } = getProductCodes(productName);
+                              writeAutomateVariable(`Mode_Manu_Dosage_${product}_${mixerCode}`, true);
                               setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose });
                             }}
                             className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
@@ -766,28 +758,44 @@ export default function ProductionPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => sendManualTag('Mode_Manu_Remplisage', mixer.id, productName)}
+                            onClick={() => {
+                              const mixerCode = getMixerCode(mixer.id);
+                              const { product } = getProductCodes(productName);
+                              writeAutomateVariable(`Mode_Manu_Remplisage_${product}_${mixerCode}`, true);
+                            }}
                             className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
                           >
                             REMPLISSAGE
                           </button>
                           <button
                             type="button"
-                            onClick={() => sendManualTag('Mode_Manu_Init', mixer.id, productName)}
+                            onClick={() => {
+                              const mixerCode = getMixerCode(mixer.id);
+                              const { product } = getProductCodes(productName);
+                              writeAutomateVariable(`Mode_Manu_Init_${product}_${mixerCode}`, true);
+                            }}
                             className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
                           >
                             INITIALISATION
                           </button>
                           <button
                             type="button"
-                            onClick={() => sendManualTag('Mode_Manu_Remp_Auto', mixer.id, productName)}
+                            onClick={() => {
+                              const mixerCode = getMixerCode(mixer.id);
+                              const { product } = getProductCodes(productName);
+                              writeAutomateVariable(`Mode_Manu_Remp_Auto_${product}_${mixerCode}`, true);
+                            }}
                             className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600"
                           >
                             AUTO
                           </button>
                           <button
                             type="button"
-                            onClick={() => sendManualTag('Mode_Manu_Remp_Manu', mixer.id, productName)}
+                            onClick={() => {
+                              const mixerCode = getMixerCode(mixer.id);
+                              const { product } = getProductCodes(productName);
+                              writeAutomateVariable(`Mode_Manu_Remp_Manu_${product}_${mixerCode}`, true);
+                            }}
                             className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2"
                           >
                             MANU
@@ -1477,15 +1485,16 @@ export default function ProductionPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  if (dosageConfirm) {
-                    const totalNum = parseFloat(dosageConfirm.total || '0');
-                    const doseNum = parseFloat(dosageConfirm.dose || '0');
-                    sendManualTag('Validation_Consigne', dosageConfirm.mixerId, dosageConfirm.productName, undefined, {
-                      total: totalNum,
-                      dose: doseNum,
-                    });
-                  }
+                onClick={async () => {
+                  const mixerCode = getMixerCode(dosageConfirm.mixerId);
+                  const { product } = getProductCodes(dosageConfirm.productName);
+                  const totalValue = parseFloat(dosageConfirm.total) || 0;
+                  const doseValue = parseFloat(dosageConfirm.dose) || 0;
+                  await Promise.all([
+                    writeAutomateVariable(`Validation_Consigne_${product}_${mixerCode}`, true),
+                    writeAutomateVariable(`Consigne_Total_${product}_${mixerCode}`, totalValue),
+                    writeAutomateVariable(`Consigne_Dose_${product}_${mixerCode}`, doseValue),
+                  ]);
                   setDosageConfirm(null);
                 }}
                 className="px-4 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
