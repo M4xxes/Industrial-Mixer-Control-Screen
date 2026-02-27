@@ -179,6 +179,21 @@ export const manualWeightsAPI = {
     }),
 };
 
+// ========== MANUAL COMMANDS (signaux automate) ==========
+
+export const manualCommandsAPI = {
+  send: (tagName: string, mixerId?: number, value?: number | string, payload?: any) =>
+    fetchAPI('/manual-commands', {
+      method: 'POST',
+      body: JSON.stringify({
+        tag_name: tagName,
+        mixer_id: mixerId ?? null,
+        value: value ?? null,
+        payload: payload ?? null,
+      }),
+    }),
+};
+
 // ========== USERS API ==========
 
 export const usersAPI = {

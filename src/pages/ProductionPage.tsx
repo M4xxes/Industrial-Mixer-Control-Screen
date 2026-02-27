@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useMixers } from '../hooks/useMixers';
-import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI } from '../services/api';
+import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI, manualCommandsAPI } from '../services/api';
 import { Recipe, Alarm, Batch, EtapesExecution } from '../types';
 import { Play, Square, Check, AlertTriangle, ChevronDown, ChevronUp, Hand, X, Power, Thermometer, Gauge, RotateCcw, Settings } from 'lucide-react';
 import MixerVisual from '../components/MixerVisual';
@@ -52,6 +52,51 @@ export default function ProductionPage() {
   };
   const closeManualModeWindow = (id: string) => {
     setManualModeWindows(prev => prev.filter(w => w.id !== id));
+  };
+
+  // Helpers pour construire les noms de tags automate
+  const getMixerTag = (mixerId: number) => `B${mixerId}`;
+  const getProductTag = (productName: string) => {
+    switch (productName) {
+      case 'HYDROCARB':
+        return 'Hydrocarb';
+      case 'D10':
+        return 'D10';
+      case 'D200':
+        return 'D200';
+      case 'HUILE MINERALE':
+        return 'Huile';
+      default:
+        return productName;
+    }
+  };
+  const getRazProductTag = (productName: string) => {
+    switch (productName) {
+      case 'HYDROCARB':
+        return 'Hydrocarbure';
+      case 'D10':
+        return 'D10';
+      case 'D200':
+        return 'D200';
+      case 'HUILE MINERALE':
+        return 'Huile';
+      default:
+        return productName;
+    }
+  };
+  const sendManualTag = (action: string, mixerId: number, productName?: string, value?: number | string, extraPayload?: any) => {
+    const mixerTag = getMixerTag(mixerId);
+    const productTag = productName ? getProductTag(productName) : undefined;
+    const tagName = productTag ? `${action}_${productTag}_${mixerTag}` : `${action}_${mixerTag}`;
+    return manualCommandsAPI.send(tagName, mixerId, value, extraPayload).catch(() => {
+      // ne pas bloquer l'IHM si l'API n'existe pas encore
+    });
+  };
+  const sendRazJeteeTag = (mixerId: number, productName: string) => {
+    const mixerTag = getMixerTag(mixerId);
+    const productTag = getRazProductTag(productName);
+    const tagName = `RAZ_Erreur_Jetee_${productTag}_${mixerTag}`;
+    return manualCommandsAPI.send(tagName, mixerId).catch(() => {});
   };
 
   // Drag des fenêtres Mode manuel (écoute globale)
@@ -313,6 +358,7 @@ export default function ProductionPage() {
     const batchNumber = batchNumberInput[mixerId] || `BATCH-${Date.now()}`;
     
     try {
+      sendManualTag('Depart_Cycle', mixerId);
       await mixersAPI.startRecipe(mixerId, {
         recipe_id: recipeId,
         operator_id: operatorName,
@@ -329,6 +375,7 @@ export default function ProductionPage() {
     if (!confirm('Êtes-vous sûr de vouloir terminer la recette en cours ?')) return;
     
     try {
+      sendManualTag('Fin_Recette', mixerId);
       await mixersAPI.endRecipe(mixerId);
       window.location.reload();
     } catch (error) {
@@ -339,6 +386,7 @@ export default function ProductionPage() {
 
   const handleValidateStep = async (mixerId: number, stepNumber: number) => {
     try {
+      sendManualTag('Valider_Etape', mixerId);
       await mixersAPI.validateStep(mixerId, stepNumber);
       window.location.reload();
     } catch (error) {
@@ -356,6 +404,7 @@ export default function ProductionPage() {
     if (!confirm(`Êtes-vous sûr de vouloir acquitter tous les défauts du malaxeur ${mixerId} ?`)) return;
     
     try {
+      sendManualTag('Acquit_Defaut', mixerId);
       // Acquitter toutes les alarmes actives pour ce malaxeur
       const mixerAlarms = alarms.filter(a => a.mixerId === mixerId && a.status === 'Active');
       await Promise.all(mixerAlarms.map(a => alarmsAPI.acknowledge(a.id)));
@@ -638,15 +687,16 @@ export default function ProductionPage() {
                   <div key={productName} className="border-b pb-4 mb-4 last:border-b-0 last:mb-0">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-md font-semibold text-gray-900">DISTRIBUTION {productName}</h4>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-red-600 font-semibold">Erreur</span>
-                        <button
-                          type="button"
-                          className="px-2 py-1 rounded border border-blue-500 text-blue-600 text-xs font-semibold bg-white hover:bg-blue-50"
-                        >
-                          RAZ
-                        </button>
-                      </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-red-600 font-semibold">Erreur</span>
+                      <button
+                        type="button"
+                        onClick={() => sendRazJeteeTag(mixer.id, productName)}
+                        className="px-2 py-1 rounded border border-blue-500 text-blue-600 text-xs font-semibold bg-white hover:bg-blue-50"
+                      >
+                        RAZ
+                      </button>
+                    </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-3 text-sm">
@@ -701,21 +751,45 @@ export default function ProductionPage() {
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose })}
+                            onClick={() => {
+                              const totalNum = parseFloat(cs.total || '0');
+                              const doseNum = parseFloat(cs.dose || '0');
+                              // Consignes envoyées à l'automate
+                              sendManualTag('Consigne_Total', mixer.id, productName, totalNum);
+                              sendManualTag('Consigne_Dose', mixer.id, productName, doseNum);
+                              // Ouverture du popup de validation
+                              setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose });
+                            }}
                             className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
                           >
                             DOSAGE
                           </button>
-                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">
+                          <button
+                            type="button"
+                            onClick={() => sendManualTag('Mode_Manu_Remplisage', mixer.id, productName)}
+                            className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+                          >
                             REMPLISSAGE
                           </button>
-                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">
+                          <button
+                            type="button"
+                            onClick={() => sendManualTag('Mode_Manu_Init', mixer.id, productName)}
+                            className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+                          >
                             INITIALISATION
                           </button>
-                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600">
+                          <button
+                            type="button"
+                            onClick={() => sendManualTag('Mode_Manu_Remp_Auto', mixer.id, productName)}
+                            className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600"
+                          >
                             AUTO
                           </button>
-                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2">
+                          <button
+                            type="button"
+                            onClick={() => sendManualTag('Mode_Manu_Remp_Manu', mixer.id, productName)}
+                            className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2"
+                          >
                             MANU
                           </button>
                         </div>
@@ -1404,7 +1478,14 @@ export default function ProductionPage() {
               <button
                 type="button"
                 onClick={() => {
-                  alert(`Dosage validé : ${dosageConfirm.productName} - Total ${dosageConfirm.total} kg, Dose ${dosageConfirm.dose} kg`);
+                  if (dosageConfirm) {
+                    const totalNum = parseFloat(dosageConfirm.total || '0');
+                    const doseNum = parseFloat(dosageConfirm.dose || '0');
+                    sendManualTag('Validation_Consigne', dosageConfirm.mixerId, dosageConfirm.productName, undefined, {
+                      total: totalNum,
+                      dose: doseNum,
+                    });
+                  }
                   setDosageConfirm(null);
                 }}
                 className="px-4 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"

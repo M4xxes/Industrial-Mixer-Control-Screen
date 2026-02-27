@@ -876,6 +876,49 @@ app.get('/api/manual-weights', async (req, res) => {
   }
 });
 
+// ========== MANUAL COMMANDS (signaux pour l'automate) ==========
+
+// GET /api/manual-commands?since_id=123 - événements depuis un id donné (pour l'automate)
+app.get('/api/manual-commands', async (req, res) => {
+  try {
+    const sinceId = parseInt(req.query.since_id || '0', 10);
+    let rows;
+    if (sinceId > 0) {
+      rows = await all(
+        'SELECT id, tag_name, mixer_id, value, payload, created_at FROM manual_commands WHERE id > ? ORDER BY id ASC',
+        [sinceId]
+      );
+    } else {
+      rows = await all(
+        'SELECT id, tag_name, mixer_id, value, payload, created_at FROM manual_commands ORDER BY id DESC LIMIT 200'
+      );
+    }
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/manual-commands - enregistre un événement bouton/consigne
+app.post('/api/manual-commands', async (req, res) => {
+  try {
+    const { tag_name, mixer_id, value, payload } = req.body || {};
+    if (!tag_name || typeof tag_name !== 'string') {
+      return res.status(400).json({ error: 'tag_name is required' });
+    }
+    const val = value !== undefined && value !== null && value !== '' ? Number(value) : null;
+    const payloadText = payload !== undefined ? JSON.stringify(payload) : null;
+    await run(
+      'INSERT INTO manual_commands (tag_name, mixer_id, value, payload) VALUES (?, ?, ?, ?)',
+      [tag_name, mixer_id ?? null, val, payloadText]
+    );
+    const row = await get('SELECT id, tag_name, mixer_id, value, payload, created_at FROM manual_commands WHERE id = last_insert_rowid()');
+    res.status(201).json(row);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // POST /api/manual-weights - Enregistrer des pesées manuelles (une ou plusieurs)
 app.post('/api/manual-weights', async (req, res) => {
   try {

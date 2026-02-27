@@ -262,6 +262,20 @@ async function initDatabase() {
     await run(`CREATE INDEX IF NOT EXISTS idx_manual_weights_product ON manual_weights(product_name)`);
     await run(`CREATE INDEX IF NOT EXISTS idx_manual_weights_created ON manual_weights(created_at)`);
 
+    // Table manual_commands (événements envoyés vers l'automate: boutons/consignes)
+    await run(`
+      CREATE TABLE IF NOT EXISTS manual_commands (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tag_name TEXT NOT NULL,
+        mixer_id INTEGER,
+        value REAL,
+        payload TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await run(`CREATE INDEX IF NOT EXISTS idx_manual_commands_tag ON manual_commands(tag_name)`);
+    await run(`CREATE INDEX IF NOT EXISTS idx_manual_commands_created ON manual_commands(created_at)`);
+
     console.log('Tables créées avec succès');
 
     // Insérer des données initiales
