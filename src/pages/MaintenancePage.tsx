@@ -31,6 +31,7 @@ export default function MaintenancePage() {
   const [newPassword, setNewPassword] = useState('');
   const [activeParamTab, setActiveParamTab] = useState<string>('B1-B2');
   const [parameterValues, setParameterValues] = useState<{ [key: string]: string }>({});
+  const [activeDosageMixer, setActiveDosageMixer] = useState<string>('B1');
 
   // Rediriger si pas admin
   if (!isAdmin()) {
@@ -253,7 +254,7 @@ export default function MaintenancePage() {
     },
     {
       id: 'B1-B2-D200',
-      label: 'B1/B2 - D200 (dissocié D10)',
+      label: 'B1/B2 - D200',
       parameters: [
         { name: 'B12 Consigne Tempo DF FdC Vannes D200', address: '%MW1140' },
         { name: 'B12 Consigne Tempo DF Remplissage D200', address: '%MW1141' },
@@ -623,10 +624,32 @@ export default function MaintenancePage() {
 
       {/* Suivi maintenance - Dosages (données ancienne supervision) */}
       <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Suivi maintenance - Dosages</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Données de suivi des dosages (D10, D200, Poudre, Huile) par malaxeur. Consignes et quantités dosées.
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-xl font-semibold">Suivi maintenance - Dosages</h2>
+        </div>
+        <p className="text-sm text-gray-600 mb-3">
+          Données de suivi des dosages (D10, D200, Poudre, Huile) par malaxeur. Consignes et quantités dosées, organisées par onglets de malaxeurs.
         </p>
+
+        {/* Onglets par malaxeur (B1, B2, B3, B5, B6, B7) */}
+        <div className="border-b mb-3 overflow-x-auto">
+          <nav className="flex space-x-2">
+            {['B1', 'B2', 'B3', 'B5', 'B6', 'B7'].map((id) => (
+              <button
+                key={id}
+                onClick={() => setActiveDosageMixer(id)}
+                className={`px-3 py-2 text-xs sm:text-sm border-b-2 font-medium whitespace-nowrap ${
+                  activeDosageMixer === id
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Malaxeur {id}
+              </button>
+            ))}
+          </nav>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
@@ -641,7 +664,7 @@ export default function MaintenancePage() {
             <tbody>
               <tr className="border">
                 <td colSpan={5} className="p-4 text-center text-gray-500 italic">
-                  Données à alimenter depuis l’API ou l’ancienne supervision (suivi dosages).
+                  Données de suivi des dosages pour le malaxeur {activeDosageMixer}. À alimenter depuis l’API ou l’ancienne supervision.
                 </td>
               </tr>
             </tbody>

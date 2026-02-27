@@ -19,6 +19,7 @@ export type RecipeFunction =
 export interface Ingredient {
   id: string;
   name: string;
+  code?: string; // Code ingrédient
   description?: string;
   category?: string;
   unit: 'Kg' | 'L' | 'g';

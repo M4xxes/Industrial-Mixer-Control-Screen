@@ -550,20 +550,53 @@ export default function ProductionPage() {
               <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">Données temps réel</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><Thermometer className="w-4 h-4" /> Température</div>
-                  <div className="text-2xl font-bold text-gray-900">{mixer.temperature.toFixed(1)}°C</div>
-                </div>
-                <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><Gauge className="w-4 h-4" /> Pression</div>
-                  <div className="text-2xl font-bold text-gray-900">{mixer.pressure.toFixed(1)} bar</div>
-                </div>
-                <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><RotateCcw className="w-4 h-4" /> Vitesse</div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <RotateCcw className="w-4 h-4" />
+                    Vitesse Vis
+                  </div>
                   <div className="text-2xl font-bold text-gray-900">{mixer.speed} tr/min</div>
                 </div>
                 <div className="p-3 border rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1"><Power className="w-4 h-4" /> Intensité</div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <Power className="w-4 h-4" />
+                    Intensité Bras
+                  </div>
                   <div className="text-2xl font-bold text-gray-900">{mixer.power.toFixed(1)} A</div>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <Power className="w-4 h-4" />
+                    Intensité Vis
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{mixer.power.toFixed(1)} A</div>
+                </div>
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                    <Thermometer className="w-4 h-4" />
+                    Température Malaxeur
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{mixer.temperature.toFixed(1)}°C</div>
+                </div>
+              </div>
+              <div className="border-t pt-3 text-sm text-gray-700">
+                <h3 className="font-semibold text-gray-900 mb-2">MESURES hydrauliques / vide</h3>
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span>Pression Hyd. Vis</span>
+                    <span className="font-medium">{mixer.pressure.toFixed(1)} bar</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Pression Hyd. Bras 1</span>
+                    <span className="font-medium">{mixer.pressure.toFixed(1)} bar</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Pression Hyd. Bras 2</span>
+                    <span className="font-medium">{mixer.pressure.toFixed(1)} bar</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Vide Malaxeur</span>
+                    <span className="font-medium">0</span>
+                  </div>
                 </div>
               </div>
               <div className="border-t pt-4">
@@ -587,7 +620,7 @@ export default function ProductionPage() {
               </div>
             </div>
             <div className="card">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 text-center border-b pb-3">DOSAGES MANUELS {mixer.name.toUpperCase()}</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2 text-center border-b pb-2">DOSAGES MANUELS {mixer.name.toUpperCase()}</h2>
               {(['HYDROCARB', 'D10', 'D200', 'HUILE MINERALE'] as const).map((productName) => {
                 const batch = getCurrentBatch(mixer.id);
                 const distribution = getDistribution(batch);
@@ -599,9 +632,22 @@ export default function ProductionPage() {
                 const basculeValue = poidsBascule[mixer.id] ?? 0;
                 const key = productName.replace(' ', '_');
                 const cs = manualConsignes[mixer.id]?.[key] ?? { total: String(csgTotal), dose: String(csgDose) };
+                const isD200 = productName === 'D200';
+                const temperatureD200 = isD200 ? mixer.temperature.toFixed(1) : undefined;
                 return (
                   <div key={productName} className="border-b pb-4 mb-4 last:border-b-0 last:mb-0">
-                    <h4 className="text-md font-semibold text-gray-900 mb-3">DISTRIBUTION {productName}</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-md font-semibold text-gray-900">DISTRIBUTION {productName}</h4>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-red-600 font-semibold">Erreur</span>
+                        <button
+                          type="button"
+                          className="px-2 py-1 rounded border border-blue-500 text-blue-600 text-xs font-semibold bg-white hover:bg-blue-50"
+                        >
+                          RAZ
+                        </button>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-3 text-sm">
                         <div>
@@ -632,18 +678,69 @@ export default function ProductionPage() {
                             className="w-full border border-gray-300 rounded px-2 py-1.5 text-gray-900"
                           />
                         </div>
-                        <div className="flex justify-between pt-1 border-t"><span className="text-gray-700">Poids Dosé:</span><span className="font-medium">{formatWeight(poidsDose)} kg</span></div>
-                        <div className="flex justify-between"><span className="text-gray-700">Poids Rest:</span><span className="font-medium">{formatWeight(poidsRest)} kg</span></div>
-                        <div className="flex justify-between"><span className="text-gray-700">Poids Bascule:</span><span className="font-medium">{formatWeight(basculeValue)} kg</span></div>
+                        <div className="flex justify-between pt-1 border-t">
+                          <span className="text-gray-700">Poids Bascule:</span>
+                          <span className="font-medium">{formatWeight(basculeValue)} kg</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">Poids Dosé:</span>
+                          <span className="font-medium">{formatWeight(poidsDose)} kg</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">Poids Rest:</span>
+                          <span className="font-medium">{formatWeight(poidsRest)} kg</span>
+                        </div>
+                        {isD200 && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">T° D200:</span>
+                            <span className="font-medium">{temperatureD200} °C</span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col justify-start">
                         <div className="grid grid-cols-2 gap-2">
-                          <button type="button" onClick={() => setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose })} className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">DOSAGE</button>
-                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">REMPLISSAGE</button>
-                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">INITIALISATION</button>
-                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600">AUTO</button>
-                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2">MANU</button>
+                          <button
+                            type="button"
+                            onClick={() => setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose })}
+                            className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+                          >
+                            DOSAGE
+                          </button>
+                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">
+                            REMPLISSAGE
+                          </button>
+                          <button type="button" className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">
+                            INITIALISATION
+                          </button>
+                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600">
+                            AUTO
+                          </button>
+                          <button type="button" className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2">
+                            MANU
+                          </button>
                         </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t text-xs text-gray-700 space-y-1">
+                      <div className="flex justify-between">
+                        <span>État Dosage :</span>
+                        <span className="font-semibold">-</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Grafcet Dosage :</span>
+                        <span className="font-semibold">-</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>État Remplissage :</span>
+                        <span className="font-semibold">-</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Grafcet Remplissage :</span>
+                        <span className="font-semibold">-</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Silo utilisé :</span>
+                        <span className="font-semibold">-</span>
                       </div>
                     </div>
                   </div>

@@ -150,7 +150,7 @@ export const etapesExecutionAPI = {
 export const ingredientsAPI = {
   getAll: () => fetchAPI('/ingredients'),
   getById: (id: string) => fetchAPI(`/ingredients/${id}`),
-  create: (data: { name: string; description?: string; category?: string; unit: string }) => fetchAPI('/ingredients', {
+  create: (data: { name: string; code?: string; description?: string; category?: string; unit: string }) => fetchAPI('/ingredients', {
     method: 'POST',
     body: JSON.stringify(data),
   }),

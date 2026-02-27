@@ -18,6 +18,7 @@ export default function RecipesPage() {
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
   const [ingredientFormData, setIngredientFormData] = useState<Partial<Ingredient>>({
     name: '',
+    code: '',
     description: '',
     category: '',
     unit: 'Kg',
@@ -106,6 +107,7 @@ export default function RecipesPage() {
       const transformedIngredients: Ingredient[] = data.map((i: any) => ({
         id: i.id,
         name: i.name,
+        code: i.code || '',
         description: i.description || '',
         category: i.category || '',
         unit: (i.unit || 'Kg') as 'Kg' | 'L' | 'g',
@@ -121,10 +123,10 @@ export default function RecipesPage() {
         console.error('Error fetching ingredients:', error);
       }
       setIngredients([
-        { id: '1', name: 'Napvis D10', description: 'Napvis D10', category: 'Liquide', unit: 'Kg', isActive: true },
-        { id: '2', name: 'Napvis D200', description: 'Napvis D200', category: 'Liquide', unit: 'Kg', isActive: true },
-        { id: '3', name: 'Huile HM', description: 'Huile minérale', category: 'Liquide', unit: 'Kg', isActive: true },
-        { id: '4', name: 'Hydrocarb', description: 'Hydrocarb', category: 'Poudre', unit: 'Kg', isActive: true },
+        { id: '1', name: 'Napvis D10', code: 'D10', description: 'Napvis D10', category: 'Liquide', unit: 'Kg', isActive: true },
+        { id: '2', name: 'Napvis D200', code: 'D200', description: 'Napvis D200', category: 'Liquide', unit: 'Kg', isActive: true },
+        { id: '3', name: 'Huile HM', code: 'HUILE', description: 'Huile minérale', category: 'Liquide', unit: 'Kg', isActive: true },
+        { id: '4', name: 'Hydrocarb', code: 'HYDRO', description: 'Hydrocarb', category: 'Poudre', unit: 'Kg', isActive: true },
       ]);
     }
   };
@@ -393,6 +395,7 @@ export default function RecipesPage() {
       setEditingIngredient(ingredient);
       setIngredientFormData({
         name: ingredient.name,
+        code: ingredient.code || '',
         description: ingredient.description || '',
         category: ingredient.category || '',
         unit: ingredient.unit,
@@ -402,6 +405,7 @@ export default function RecipesPage() {
       setEditingIngredient(null);
       setIngredientFormData({
         name: '',
+        code: '',
         description: '',
         category: '',
         unit: 'Kg',
@@ -416,6 +420,7 @@ export default function RecipesPage() {
     setEditingIngredient(null);
     setIngredientFormData({
       name: '',
+      code: '',
       description: '',
       category: '',
       unit: 'Kg',
@@ -432,6 +437,7 @@ export default function RecipesPage() {
     try {
       const ingredientData = {
         name: ingredientFormData.name!,
+        code: ingredientFormData.code || '',
         description: ingredientFormData.description || '',
         category: ingredientFormData.category || '',
         unit: ingredientFormData.unit || 'Kg',
@@ -650,7 +656,7 @@ export default function RecipesPage() {
                   <th className="border p-2 text-left">Fonction</th>
                   <th className="border p-2 text-left">Bras</th>
                   <th className="border p-2 text-left">Vis</th>
-                  <th className="border p-2 text-left">Référence</th>
+                  <th className="border p-2 text-left">Refroidissement</th>
                   <th className="border p-2 text-left">Durée (s)</th>
                   <th className="border p-2 text-left">Produit</th>
                   <th className="border p-2 text-left">Poids (Kg)</th>
@@ -768,7 +774,7 @@ export default function RecipesPage() {
                         <th className="border p-2 text-left">Fonction</th>
                         <th className="border p-2 text-left">Bras</th>
                         <th className="border p-2 text-left">Vis</th>
-                        <th className="border p-2 text-left">Référence</th>
+                        <th className="border p-2 text-left">Refroidissement</th>
                         <th className="border p-2 text-left">Durée (s)</th>
                         <th className="border p-2 text-left">Produit</th>
                         <th className="border p-2 text-left">Poids (Kg)</th>
@@ -935,6 +941,7 @@ export default function RecipesPage() {
                 <thead>
                   <tr className="border-b bg-gray-50">
                     <th className="text-left p-3">Nom</th>
+                    <th className="text-left p-3">Code</th>
                     <th className="text-left p-3">Description</th>
                     <th className="text-left p-3">Catégorie</th>
                     <th className="text-left p-3">Unité</th>
@@ -945,7 +952,7 @@ export default function RecipesPage() {
                 <tbody>
                   {ingredients.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center p-4 text-gray-500">
+                      <td colSpan={7} className="text-center p-4 text-gray-500">
                         Aucun ingrédient trouvé
                       </td>
                     </tr>
@@ -953,6 +960,7 @@ export default function RecipesPage() {
                     ingredients.map((ingredient) => (
                       <tr key={ingredient.id} className="border-b hover:bg-gray-50">
                         <td className="p-3 font-medium">{ingredient.name}</td>
+                        <td className="p-3 text-sm">{ingredient.code || '-'}</td>
                         <td className="p-3 text-sm text-gray-600">{ingredient.description || '-'}</td>
                         <td className="p-3">{ingredient.category || '-'}</td>
                         <td className="p-3">{ingredient.unit}</td>
@@ -1015,6 +1023,18 @@ export default function RecipesPage() {
                   onChange={(e) => setIngredientFormData({ ...ingredientFormData, name: e.target.value })}
                   className="w-full border rounded-md px-3 py-2"
                   placeholder="Ex: Napvis D10"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Code
+                </label>
+                <input
+                  type="text"
+                  value={ingredientFormData.code}
+                  onChange={(e) => setIngredientFormData({ ...ingredientFormData, code: e.target.value })}
+                  className="w-full border rounded-md px-3 py-2"
+                  placeholder="Ex: D10, D200..."
                 />
               </div>
               <div>
