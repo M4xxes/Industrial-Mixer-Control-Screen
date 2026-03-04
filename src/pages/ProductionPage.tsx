@@ -69,6 +69,7 @@ export default function ProductionPage() {
     try {
       await automateAPI.writeVariable(variable, value);
     } catch (error) {
+      // Requête envoyée ; erreur loguée en console uniquement (pas d'alerte)
       console.error('Erreur écriture variable automate', variable, error);
     }
   };
@@ -733,10 +734,16 @@ export default function ProductionPage() {
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               const mixerCode = getMixerCode(mixer.id);
                               const { product } = getProductCodes(productName);
-                              writeAutomateVariable(`Mode_Manu_Dosage_${product}_${mixerCode}`, true);
+                              const totalValue = parseFloat(cs.total) || 0;
+                              const doseValue = parseFloat(cs.dose) || 0;
+                              await Promise.all([
+                                writeAutomateVariable(`Validation_Consigne_${product}_${mixerCode}`, true),
+                                writeAutomateVariable(`Consigne_Total_${product}_${mixerCode}`, totalValue),
+                                writeAutomateVariable(`Consigne_Dose_${product}_${mixerCode}`, doseValue),
+                              ]);
                               setDosageConfirm({ open: true, mixerId: mixer.id, productName, total: cs.total, dose: cs.dose });
                             }}
                             className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
@@ -1141,42 +1148,55 @@ export default function ProductionPage() {
                   </span>
                 </div>
                 
-                {/* Temps Restant - toujours affiché */}
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tps Restant:</span>
-                  <span className="text-gray-900 font-medium">
-                    {currentStep ? formatTimeRemaining(getTimeRemaining(currentStep, currentEtapeExec, batch)) : '-'} s
-                  </span>
-                </div>
+              {/* Temps Restant - toujours affiché */}
+              <div className="flex justify-between">
+                <span className="text-gray-600">Tps Restant:</span>
+                <span className="text-gray-900 font-medium">
+                  {formatTimeRemaining(
+                    currentStep ? getTimeRemaining(currentStep, currentEtapeExec, batch) : 0
+                  )}{' '}
+                  s
+                </span>
+              </div>
                 
                 {/* Produit - toujours affiché */}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Produit:</span>
                   <span className="text-gray-900 font-medium">
                     {currentStep?.product || '-'}
-                    {currentStep?.weight !== undefined && currentStep.weight !== null && (
-                      <> Consigne: {currentStep.weight.toFixed(2)} Kg</>
-                    )}
-                    {currentEtapeExec?.quantiteDosee !== undefined && currentEtapeExec.quantiteDosee !== null && (
-                      <> Mesure: {currentEtapeExec.quantiteDosee.toFixed(2)} Kg</>
-                    )}
-                    {!currentEtapeExec && batch?.produitConsigne !== undefined && batch?.produitConsigne !== null && (
-                      <> Consigne: {batch.produitConsigne.toFixed(2)} Kg</>
-                    )}
-                    {!currentEtapeExec && batch?.produitMesure !== undefined && batch?.produitMesure !== null && (
-                      <> Mesure: {batch.produitMesure.toFixed(2)} Kg</>
-                    )}
                   </span>
                 </div>
-                
-                {/* Valeur Critère - toujours affichée */}
-                {currentEtapeExec?.valeurCritere && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Consigne:</span>
+                  <span className="text-gray-900 font-medium">
+                    {(() => {
+                      const consigne =
+                        currentStep?.weight ??
+                        (batch?.produitConsigne !== undefined && batch.produitConsigne !== null
+                          ? batch.produitConsigne
+                          : null);
+                      return consigne !== null && consigne !== undefined
+                        ? `${consigne.toFixed(2)} Kg`
+                        : '-';
+                    })()}
+                  </span>
+                </div>
+
+                {/* Consigne atteinte */}
+                {currentEtapeExec?.consigneAtteinte !== undefined && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Valeur Critère:</span>
-                    <span className="text-gray-900 font-medium">{currentEtapeExec.valeurCritere}</span>
+                    <span className="text-gray-600">Consigne atteinte:</span>
+                    <span
+                      className={`font-medium ${
+                        currentEtapeExec.consigneAtteinte ? 'text-green-600' : 'text-gray-600'
+                      }`}
+                    >
+                      {currentEtapeExec.consigneAtteinte ? 'Oui' : 'Non'}
+                    </span>
                   </div>
                 )}
-                
+
+                {/* Consigne en Kg */}
                 {(() => {
                   const consigneKg =
                     currentStep?.weight ??
@@ -1194,6 +1214,14 @@ export default function ProductionPage() {
                   );
                 })()}
                 
+                {/* Valeur Critère - toujours affichée */}
+                {currentEtapeExec?.valeurCritere && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Valeur Critère:</span>
+                    <span className="text-gray-900 font-medium">{currentEtapeExec.valeurCritere}</span>
+                  </div>
+                )}
+                
                 {/* Commentaire - toujours affiché si présent */}
                 {currentEtapeExec?.commentaire && (
                   <div className="flex justify-between">
@@ -1206,7 +1234,7 @@ export default function ProductionPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Prochain Appel Opérateur:</span>
                   <span className="text-gray-900 font-medium">
-                    {batch?.prochainAppelOperateurMin !== undefined ? `${batch.prochainAppelOperateurMin} mn` : '-'}
+                    {(batch?.prochainAppelOperateurMin ?? 0)} mn
                   </span>
                 </div>
                 
@@ -1214,7 +1242,7 @@ export default function ProductionPage() {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Appel Préparation au Vide:</span>
                   <span className="text-gray-900 font-medium">
-                    {batch?.appelPreparationVideMin !== undefined ? `${batch.appelPreparationVideMin} mn` : '-'}
+                    {(batch?.appelPreparationVideMin ?? 0)} mn
                   </span>
                 </div>
               </div>
@@ -1471,13 +1499,7 @@ export default function ProductionPage() {
                 onClick={async () => {
                   const mixerCode = getMixerCode(dosageConfirm.mixerId);
                   const { product } = getProductCodes(dosageConfirm.productName);
-                  const totalValue = parseFloat(dosageConfirm.total) || 0;
-                  const doseValue = parseFloat(dosageConfirm.dose) || 0;
-                  await Promise.all([
-                    writeAutomateVariable(`Validation_Consigne_${product}_${mixerCode}`, true),
-                    writeAutomateVariable(`Consigne_Total_${product}_${mixerCode}`, totalValue),
-                    writeAutomateVariable(`Consigne_Dose_${product}_${mixerCode}`, doseValue),
-                  ]);
+                  await writeAutomateVariable(`Mode_Manu_Dosage_${product}_${mixerCode}`, true);
                   setDosageConfirm(null);
                 }}
                 className="px-4 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"

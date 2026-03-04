@@ -40,7 +40,15 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
       // Retourner un tableau vide silencieusement pour ingredients
       return [];
     }
-    throw new Error(`API Error: ${response.statusText}`);
+    let detail = response.statusText;
+    try {
+      const body = await response.json();
+      if (body?.message) detail = body.message;
+      else if (body?.error) detail = body.error;
+    } catch {
+      // ignorer si le corps n'est pas du JSON
+    }
+    throw new Error(`API Error: ${response.status} ${detail}`);
   }
 
   const data = await response.json();

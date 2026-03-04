@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { mixersAPI, usersAPI } from '../services/api';
+import { mixersAPI, usersAPI, batchesAPI } from '../services/api';
 import { Wifi, WifiOff, CheckCircle2, XCircle, Plus, Edit, Trash2, X, Lock, User, Save } from 'lucide-react';
 
 interface User {
@@ -32,6 +32,7 @@ export default function MaintenancePage() {
   const [activeParamTab, setActiveParamTab] = useState<string>('B1-B2');
   const [parameterValues, setParameterValues] = useState<{ [key: string]: string }>({});
   const [activeDosageMixer, setActiveDosageMixer] = useState<string>('B1');
+  const [dosageBatches, setDosageBatches] = useState<Batch[]>([]);
 
   // Rediriger si pas admin
   if (!isAdmin()) {
@@ -74,6 +75,15 @@ export default function MaintenancePage() {
           console.error('Error fetching users:', error);
           // Ne pas bloquer l'application si l'API users n'existe pas encore
           setUsers([]);
+        }
+
+        // Charger les lots avec distribution pour le suivi des dosages
+        try {
+          const batchesData = await batchesAPI.getAll();
+          setDosageBatches(batchesData || []);
+        } catch (error) {
+          console.error('Error fetching batches for dosages:', error);
+          setDosageBatches([]);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -662,11 +672,47 @@ export default function MaintenancePage() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border">
-                <td colSpan={5} className="p-4 text-center text-gray-500 italic">
-                  Données de suivi des dosages pour le malaxeur {activeDosageMixer}. À alimenter depuis l’API ou l’ancienne supervision.
-                </td>
-              </tr>
+              {(() => {
+                const mixerNumber = parseInt(activeDosageMixer.replace('B', ''), 10);
+                const rows =
+                  dosageBatches
+                    .filter((b) => b.mixerId === mixerNumber && Array.isArray(b.distribution) && b.distribution.length > 0)
+                    .flatMap((b) =>
+                      (b.distribution || []).map((d) => ({
+                        mixerId: b.mixerId,
+                        productName: d.productName,
+                        consigne: d.qteFormule || 0,
+                        dosee: d.qteDosee || 0,
+                        date: b.startedAt,
+                      }))
+                    )
+                    .sort(
+                      (a, b) =>
+                        new Date(b.date || '').getTime() - new Date(a.date || '').getTime()
+                    );
+
+                if (rows.length === 0) {
+                  return (
+                    <tr className="border">
+                      <td colSpan={5} className="p-4 text-center text-gray-500 italic">
+                        Aucune donnée de dosage trouvée pour le malaxeur {activeDosageMixer}.
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return rows.map((row, idx) => (
+                  <tr key={`${row.mixerId}-${row.productName}-${idx}`} className="border">
+                    <td className="border p-2 text-left">Malaxeur B{row.mixerId}</td>
+                    <td className="border p-2 text-left">{row.productName}</td>
+                    <td className="border p-2 text-right">{row.consigne.toFixed(2)}</td>
+                    <td className="border p-2 text-right">{row.dosee.toFixed(2)}</td>
+                    <td className="border p-2 text-left">
+                      {row.date ? new Date(row.date).toLocaleString('fr-FR') : '-'}
+                    </td>
+                  </tr>
+                ));
+              })()}
             </tbody>
           </table>
         </div>
