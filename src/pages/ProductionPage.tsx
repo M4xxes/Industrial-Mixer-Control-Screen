@@ -673,20 +673,6 @@ export default function ProductionPage() {
                   <div key={productName} className="border-b pb-4 mb-4 last:border-b-0 last:mb-0">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-md font-semibold text-gray-900">DISTRIBUTION {productName}</h4>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-red-600 font-semibold">Erreur</span>
-                      <button
-                          type="button"
-                          className="px-2 py-1 rounded border border-blue-500 text-blue-600 text-xs font-semibold bg-white hover:bg-blue-50"
-                          onClick={() => {
-                            const mixerCode = getMixerCode(mixer.id);
-                            const { razProduct } = getProductCodes(productName);
-                            writeAutomateVariable(`RAZ_Erreur_Jetee_${razProduct}_${mixerCode}`, true);
-                          }}
-                        >
-                          RAZ
-                        </button>
-                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-3 text-sm">
@@ -751,6 +737,17 @@ export default function ProductionPage() {
                           >
                             DOSAGE
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const mixerCode = getMixerCode(mixer.id);
+                              const { product } = getProductCodes(productName);
+                              writeAutomateVariable(`Mode_Manu_Init_${product}_${mixerCode}`, true);
+                            }}
+                            className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+                          >
+                            INITIALISATION
+                          </button>
                           {productName !== 'HUILE MINERALE' && (
                             <>
                               <button
@@ -763,17 +760,6 @@ export default function ProductionPage() {
                                 className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
                               >
                                 REMPLISSAGE
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const mixerCode = getMixerCode(mixer.id);
-                                  const { product } = getProductCodes(productName);
-                                  writeAutomateVariable(`Mode_Manu_Init_${product}_${mixerCode}`, true);
-                                }}
-                                className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
-                              >
-                                INITIALISATION
                               </button>
                               <button
                                 type="button"
@@ -1185,7 +1171,6 @@ export default function ProductionPage() {
                   </div>
                 )}
                 
-                {/* Consigne Atteinte - toujours affichée */}
                 {(() => {
                   const consigneKg =
                     currentStep?.weight ??
