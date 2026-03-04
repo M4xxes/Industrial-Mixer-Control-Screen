@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Scale, Plus, Save } from 'lucide-react';
@@ -20,10 +20,41 @@ export default function BalanceManuelPage() {
   const [sequenceByProduct, setSequenceByProduct] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+   const [history, setHistory] = useState<any[]>([]);
+   const [loadingHistory, setLoadingHistory] = useState(false);
+   const [filterProduct, setFilterProduct] = useState('');
+   const [filterFrom, setFilterFrom] = useState('');
+   const [filterTo, setFilterTo] = useState('');
 
   if (!isAdmin()) {
     return <Navigate to="/alarms" replace />;
   }
+
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const data = await manualWeightsAPI.getAll(filterProduct || undefined);
+      setHistory(
+        (data as any[]).map((row) => ({
+          id: row.id,
+          productName: row.productName,
+          weight: row.weightKg ?? row.weight ?? 0,
+          sequence: row.sequenceNum ?? row.sequence ?? 1,
+          timestamp: row.createdAt ?? row.timestamp,
+        }))
+      );
+    } catch (err) {
+      console.error('Erreur chargement historique pesées manuelles', err);
+      setHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddWeight = () => {
     const w = parseFloat(weight);
@@ -56,6 +87,8 @@ export default function BalanceManuelPage() {
       );
       setEntries([]);
       setSequenceByProduct({});
+      // Recharger l'historique BDD après enregistrement
+      await loadHistory();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement.');
     } finally {
@@ -169,6 +202,95 @@ export default function BalanceManuelPage() {
                     <td className="p-2 text-gray-600">{new Date(e.timestamp).toLocaleString('fr-FR')}</td>
                   </tr>
                 ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="text-lg font-semibold mb-3">Historique des pesées enregistrées (base de données)</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
+          <div>
+            <label className="block text-gray-700 mb-1">Filtre produit</label>
+            <input
+              type="text"
+              value={filterProduct}
+              onChange={(e) => setFilterProduct(e.target.value)}
+              placeholder="Ex: D10"
+              className="w-full border border-gray-300 rounded-md px-3 py-1.5"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1">Date début</label>
+            <input
+              type="date"
+              value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-3 py-1.5"
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1">Date fin</label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={filterTo}
+                onChange={(e) => setFilterTo(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-1.5"
+              />
+              <button
+                type="button"
+                onClick={loadHistory}
+                className="px-3 py-1.5 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Recharger
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                <th className="text-left p-2">Produit</th>
+                <th className="text-right p-2">Poids (kg)</th>
+                <th className="text-left p-2">N° pesée</th>
+                <th className="text-left p-2">Date et heure</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingHistory ? (
+                <tr>
+                  <td colSpan={4} className="p-4 text-center text-gray-500">
+                    Chargement...
+                  </td>
+                </tr>
+              ) : history.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-4 text-center text-gray-500">
+                    Aucune pesée enregistrée.
+                  </td>
+                </tr>
+              ) : (
+                history
+                  .filter((e) => {
+                    const t = e.timestamp ? new Date(e.timestamp) : null;
+                    if (filterFrom && t && t < new Date(filterFrom)) return false;
+                    if (filterTo && t && t > new Date(filterTo + 'T23:59:59')) return false;
+                    return true;
+                  })
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .map((e) => (
+                    <tr key={e.id} className="border-b">
+                      <td className="p-2 font-medium">{e.productName}</td>
+                      <td className="p-2 text-right">{(e.weight ?? 0).toFixed(2)}</td>
+                      <td className="p-2">{e.sequence}</td>
+                      <td className="p-2 text-gray-600">
+                        {e.timestamp ? new Date(e.timestamp).toLocaleString('fr-FR') : '-'}
+                      </td>
+                    </tr>
+                  ))
               )}
             </tbody>
           </table>

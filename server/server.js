@@ -867,6 +867,54 @@ app.get('/api/batches/:id', async (req, res) => {
   }
 });
 
+// PUT /api/batches/:id - Mettre à jour les métadonnées d'un lot (numéro, recette, dates, statut, opérateur...)
+app.put('/api/batches/:id', async (req, res) => {
+  try {
+    const {
+      batch_number,
+      mixer_id,
+      recipe_id,
+      started_at,
+      completed_at,
+      status,
+      operator_id,
+    } = req.body;
+
+    await run(
+      `
+      UPDATE batches
+      SET
+        batch_number = COALESCE(?, batch_number),
+        mixer_id = COALESCE(?, mixer_id),
+        recipe_id = COALESCE(?, recipe_id),
+        started_at = COALESCE(?, started_at),
+        completed_at = COALESCE(?, completed_at),
+        status = COALESCE(?, status),
+        operator_id = COALESCE(?, operator_id)
+      WHERE id = ?
+    `,
+      [
+        batch_number ?? null,
+        mixer_id ?? null,
+        recipe_id ?? null,
+        started_at ?? null,
+        completed_at ?? null,
+        status ?? null,
+        operator_id ?? null,
+        req.params.id,
+      ]
+    );
+
+    const updated = await get('SELECT * FROM batches WHERE id = ?', [req.params.id]);
+    if (!updated) {
+      return res.status(404).json({ error: 'Lot non trouvé' });
+    }
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // PUT /api/batches/:id/distribution - Mettre à jour la distribution d'un lot
 app.put('/api/batches/:id/distribution', async (req, res) => {
   try {
@@ -885,6 +933,31 @@ app.put('/api/batches/:id/distribution', async (req, res) => {
     }
     
     const updated = await all('SELECT * FROM batch_distribution WHERE batch_id = ?', [req.params.id]);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/batch-steps/:id - Mettre à jour les poids d'une étape de lot
+app.put('/api/batch-steps/:id', async (req, res) => {
+  try {
+    const { planned_weight, actual_weight } = req.body;
+    await run(
+      `
+      UPDATE batch_steps
+      SET
+        planned_weight = COALESCE(?, planned_weight),
+        actual_weight = COALESCE(?, actual_weight)
+      WHERE id = ?
+    `,
+      [planned_weight ?? null, actual_weight ?? null, req.params.id]
+    );
+
+    const updated = await get('SELECT * FROM batch_steps WHERE id = ?', [req.params.id]);
+    if (!updated) {
+      return res.status(404).json({ error: 'Étape de lot non trouvée' });
+    }
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });

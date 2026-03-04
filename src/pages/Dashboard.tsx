@@ -2,7 +2,7 @@ import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useMixers } from '../hooks/useMixers';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { inventoryAPI, alarmsAPI, batchesAPI } from '../services/api';
+import { inventoryAPI, alarmsAPI, batchesAPI, automateAPI } from '../services/api';
 import { Inventory, Alarm, Batch } from '../types';
 import MixerVisual from '../components/MixerVisual';
 import { Package, AlertTriangle, TrendingUp, RotateCcw } from 'lucide-react';
@@ -16,13 +16,12 @@ export default function Dashboard() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const lastPathRef = useRef<string>('');
-  // Base de remise à zéro des quantités consommées (soustraite à l'affichage)
-  const [consumptionResetBaseline, setConsumptionResetBaseline] = useState<{
-    D10: number;
-    D200: number;
-    Huile: number;
-    Poudres: number;
-  } | null>(null); // Pour éviter les scrolls multiples sur la même route
+  type GroupKey = 'B12' | 'B35' | 'B67';
+  type ProductKey = 'D10' | 'D200' | 'Huile' | 'Poudres';
+  // Base de remise à zéro par groupe et produit
+  const [consumptionResetBaseline, setConsumptionResetBaseline] = useState<
+    Partial<Record<GroupKey, Partial<Record<ProductKey, number>>>>
+  >({});
 
   // Rediriger si pas admin
   if (!isAdmin()) {
@@ -113,11 +112,22 @@ export default function Dashboard() {
 
   const activeMixers = mixers.filter(m => m.status === 'Production').length;
   
-  // Calculer la consommation totale par produit
-  const getConsumptionByProduct = (productName: string) => {
+  const groups: Array<{ key: GroupKey; label: string; mixerIds: number }> = [
+    { key: 'B12', label: 'B1/B2', mixerIds: 12 },
+    { key: 'B35', label: 'B3/B5', mixerIds: 35 },
+    { key: 'B67', label: 'B6/B7', mixerIds: 67 },
+  ];
+
+  // Calculer la consommation totale par produit et par groupe
+  const getConsumptionByProductAndGroup = (productName: string, group: GroupKey) => {
+    const ids =
+      group === 'B12' ? [1, 2] :
+      group === 'B35' ? [3, 5] :
+      [6, 7];
     // Pour l'instant, on calcule depuis les batches terminés/en cours
     // On pourrait améliorer cela avec les transactions d'inventaire
     const productBatches = batches.filter(b => {
+      if (!ids.includes(b.mixerId)) return false;
       const dist = b.distribution?.find(d => d.productName === productName);
       return dist && dist.qteDosee > 0;
     });
@@ -127,24 +137,31 @@ export default function Dashboard() {
     }, 0);
   };
 
-  const consumptionD10 = getConsumptionByProduct('Napvis D10');
-  const consumptionD200 = getConsumptionByProduct('Napvis D200');
-  const consumptionHuile = getConsumptionByProduct('Huile HM');
-  const consumptionPoudres = getConsumptionByProduct('Hydrocarb');
+  const getDisplayConsumption = (group: GroupKey, product: ProductKey, raw: number) => {
+    const base = consumptionResetBaseline[group]?.[product] ?? 0;
+    return Math.max(0, raw - base);
+  };
 
-  const displayD10 = consumptionResetBaseline ? Math.max(0, consumptionD10 - consumptionResetBaseline.D10) : consumptionD10;
-  const displayD200 = consumptionResetBaseline ? Math.max(0, consumptionD200 - consumptionResetBaseline.D200) : consumptionD200;
-  const displayHuile = consumptionResetBaseline ? Math.max(0, consumptionHuile - consumptionResetBaseline.Huile) : consumptionHuile;
-  const displayPoudres = consumptionResetBaseline ? Math.max(0, consumptionPoudres - consumptionResetBaseline.Poudres) : consumptionPoudres;
-
-  const handleResetConsumption = () => {
-    if (!confirm('Remettre à zéro les quantités consommées affichées ? Les valeurs actuelles deviendront la nouvelle base.')) return;
-    setConsumptionResetBaseline({
-      D10: consumptionD10,
-      D200: consumptionD200,
-      Huile: consumptionHuile,
-      Poudres: consumptionPoudres,
-    });
+  const handleResetCell = async (group: GroupKey, product: ProductKey, rawValue: number) => {
+    setConsumptionResetBaseline(prev => ({
+      ...prev,
+      [group]: {
+        ...(prev[group] || {}),
+        [product]: rawValue,
+      },
+    }));
+    // Envoyer la variable automate correspondante
+    const groupSuffix = group === 'B12' ? 'B12' : group === 'B35' ? 'B35' : 'B67';
+    const varProduct =
+      product === 'Poudres' ? 'Hydrocarbure' :
+      product === 'Huile' ? 'HM' :
+      product;
+    const variable = `RAZ_Conso_${varProduct}_${groupSuffix}`;
+    try {
+      await automateAPI.writeVariable(variable, true);
+    } catch (e) {
+      console.error('Erreur RAZ conso automate', variable, e);
+    }
   };
 
   return (
@@ -215,37 +232,53 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Consommation par produit */}
-      <div className="card">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Consommation des produits</h2>
-          <button
-            onClick={handleResetConsumption}
-            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Remettre à zéro les quantités
-          </button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">D10</p>
-            <p className="text-2xl font-bold text-gray-900">{displayD10.toFixed(2)} Kg</p>
+      {/* Consommation par produit par couple de malaxeurs */}
+      {groups.map((group) => {
+        const consD10 = getConsumptionByProductAndGroup('Napvis D10', group.key);
+        const consD200 = getConsumptionByProductAndGroup('Napvis D200', group.key);
+        const consHuile = getConsumptionByProductAndGroup('Huile HM', group.key);
+        const consPoudres = getConsumptionByProductAndGroup('Hydrocarb', group.key);
+
+        const dispD10 = getDisplayConsumption(group.key, 'D10', consD10);
+        const dispD200 = getDisplayConsumption(group.key, 'D200', consD200);
+        const dispHuile = getDisplayConsumption(group.key, 'Huile', consHuile);
+        const dispPoudres = getDisplayConsumption(group.key, 'Poudres', consPoudres);
+
+        return (
+          <div key={group.key} className="card">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Consommation des produits {group.label}
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {[
+                { label: 'D10', value: dispD10, raw: consD10, key: 'D10' as ProductKey },
+                { label: 'D200', value: dispD200, raw: consD200, key: 'D200' as ProductKey },
+                { label: 'Huile minérale', value: dispHuile, raw: consHuile, key: 'Huile' as ProductKey },
+                { label: 'Poudres', value: dispPoudres, raw: consPoudres, key: 'Poudres' as ProductKey },
+              ].map((cell) => (
+                <div key={cell.label} className="p-3 bg-gray-50 rounded-lg flex flex-col justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">{cell.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{cell.value.toFixed(2)} Kg</p>
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleResetCell(group.key, cell.key, cell.raw)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-100"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      RAZ
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">D200</p>
-            <p className="text-2xl font-bold text-gray-900">{displayD200.toFixed(2)} Kg</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Huile minérale</p>
-            <p className="text-2xl font-bold text-gray-900">{displayHuile.toFixed(2)} Kg</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">Poudres</p>
-            <p className="text-2xl font-bold text-gray-900">{displayPoudres.toFixed(2)} Kg</p>
-          </div>
-        </div>
-      </div>
+        );
+      })}
 
       {/* Grille des malaxeurs */}
       <div>

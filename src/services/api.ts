@@ -113,6 +113,10 @@ export const alarmsAPI = {
 export const batchesAPI = {
   getAll: () => fetchAPI('/batches'),
   getById: (id: string) => fetchAPI(`/batches/${id}`),
+  update: (id: string, data: any) => fetchAPI(`/batches/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
 };
 
 // ========== DEFAUTS CATALOGUE API ==========
@@ -143,6 +147,16 @@ export const etapesExecutionAPI = {
     method: 'PUT',
     body: JSON.stringify(data),
   }),
+};
+
+// ========== BATCH STEPS API ==========
+
+export const batchStepsAPI = {
+  update: (id: string, data: any) =>
+    fetchAPI(`/batch-steps/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 // ========== INGREDIENTS API ==========

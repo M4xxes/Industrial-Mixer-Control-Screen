@@ -44,15 +44,10 @@ export default function ProductionPage() {
 
   // Helpers variables automate
   const getMixerCode = (mixerId: number): string => {
-    switch (mixerId) {
-      case 1: return 'B1';
-      case 2: return 'B2';
-      case 3: return 'B3';
-      case 5: return 'B5';
-      case 6: return 'B6';
-      case 7: return 'B7';
-      default: return `B${mixerId}`;
-    }
+    const mixer = mixers.find(m => m.id === mixerId);
+    const mixerNumber = mixer?.name.match(/B(\d+)/)?.[1];
+    if (mixerNumber) return `B${mixerNumber}`;
+    return `B${mixerId}`;
   };
 
   const getProductCodes = (productName: string): { product: string; razProduct: string } => {
@@ -756,50 +751,54 @@ export default function ProductionPage() {
                           >
                             DOSAGE
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mixerCode = getMixerCode(mixer.id);
-                              const { product } = getProductCodes(productName);
-                              writeAutomateVariable(`Mode_Manu_Remplisage_${product}_${mixerCode}`, true);
-                            }}
-                            className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
-                          >
-                            REMPLISSAGE
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mixerCode = getMixerCode(mixer.id);
-                              const { product } = getProductCodes(productName);
-                              writeAutomateVariable(`Mode_Manu_Init_${product}_${mixerCode}`, true);
-                            }}
-                            className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
-                          >
-                            INITIALISATION
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mixerCode = getMixerCode(mixer.id);
-                              const { product } = getProductCodes(productName);
-                              writeAutomateVariable(`Mode_Manu_Remp_Auto_${product}_${mixerCode}`, true);
-                            }}
-                            className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600"
-                          >
-                            AUTO
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const mixerCode = getMixerCode(mixer.id);
-                              const { product } = getProductCodes(productName);
-                              writeAutomateVariable(`Mode_Manu_Remp_Manu_${product}_${mixerCode}`, true);
-                            }}
-                            className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2"
-                          >
-                            MANU
-                          </button>
+                          {productName !== 'HUILE MINERALE' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const mixerCode = getMixerCode(mixer.id);
+                                  const { product } = getProductCodes(productName);
+                                  writeAutomateVariable(`Mode_Manu_Remplisage_${product}_${mixerCode}`, true);
+                                }}
+                                className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+                              >
+                                REMPLISSAGE
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const mixerCode = getMixerCode(mixer.id);
+                                  const { product } = getProductCodes(productName);
+                                  writeAutomateVariable(`Mode_Manu_Init_${product}_${mixerCode}`, true);
+                                }}
+                                className="px-3 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700"
+                              >
+                                INITIALISATION
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const mixerCode = getMixerCode(mixer.id);
+                                  const { product } = getProductCodes(productName);
+                                  writeAutomateVariable(`Mode_Manu_Remp_Auto_${product}_${mixerCode}`, true);
+                                }}
+                                className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600"
+                              >
+                                AUTO
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const mixerCode = getMixerCode(mixer.id);
+                                  const { product } = getProductCodes(productName);
+                                  writeAutomateVariable(`Mode_Manu_Remp_Manu_${product}_${mixerCode}`, true);
+                                }}
+                                className="px-3 py-2 bg-gray-500 text-white rounded text-sm font-medium hover:bg-gray-600 col-span-2"
+                              >
+                                MANU
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -828,17 +827,6 @@ export default function ProductionPage() {
                   </div>
                 );
               })}
-            </div>
-            <div className="card border-primary-200 bg-primary-50/30">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2"><Settings className="w-5 h-5 text-primary-600" /> Maintenance malaxeur</h3>
-              <p className="text-sm text-gray-600 mb-3">Pour faire un dosage manuel tout en consultant les paramètres et le suivi dosages, ouvrez la page Maintenance.</p>
-              <Link to="/maintenance" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded text-sm font-medium hover:bg-primary-700">
-                <Settings className="w-4 h-4" /> Ouvrir Maintenance (nouvel onglet)
-              </Link>
-              <div className="mt-4 pt-3 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Suivi maintenance - Dosages</h4>
-                <p className="text-xs text-gray-500 italic">À afficher depuis la page Maintenance ou API dédiée.</p>
-              </div>
             </div>
           </>
         )}
@@ -1198,14 +1186,22 @@ export default function ProductionPage() {
                 )}
                 
                 {/* Consigne Atteinte - toujours affichée */}
-                {currentEtapeExec?.consigneAtteinte !== undefined && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Consigne Atteinte:</span>
-                    <span className={`font-medium ${currentEtapeExec.consigneAtteinte ? 'text-green-600' : 'text-gray-600'}`}>
-                      {currentEtapeExec.consigneAtteinte ? 'Oui' : 'Non'}
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const consigneKg =
+                    currentStep?.weight ??
+                    (batch?.produitConsigne !== undefined && batch.produitConsigne !== null
+                      ? batch.produitConsigne
+                      : null);
+                  if (consigneKg === null || consigneKg === undefined) return null;
+                  return (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Consigne en Kg:</span>
+                      <span className="font-medium text-gray-900">
+                        {consigneKg.toFixed(2)} Kg
+                      </span>
+                    </div>
+                  );
+                })()}
                 
                 {/* Commentaire - toujours affiché si présent */}
                 {currentEtapeExec?.commentaire && (
@@ -1352,29 +1348,25 @@ export default function ProductionPage() {
                 )}
               </div>
 
-              {/* Données temps réel (D10, D200, Huile) */}
+              {/* Données temps réel principales */}
               <div className="border-t pt-4 space-y-2 text-sm">
                 <h3 className="font-semibold text-gray-900 mb-2">Données Temps Réel</h3>
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">D10:</span>
-                    <span className="text-gray-900">- / -</span>
+                    <span className="text-gray-600">Vitesse Vis:</span>
+                    <span className="text-gray-900">{(mixer.speed || 0).toFixed(0)} tr/min</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">D200:</span>
-                    <span className="text-gray-900">- / -</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Huile:</span>
-                    <span className="text-gray-900">- / -</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Température:</span>
-                    <span className="text-gray-900">{(mixer.temperature || 0).toFixed(1)}°C</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Intensité:</span>
+                    <span className="text-gray-600">Intensité Bras:</span>
                     <span className="text-gray-900">{(mixer.power || 0).toFixed(1)} A</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Intensité Vis:</span>
+                    <span className="text-gray-900">{(mixer.power || 0).toFixed(1)} A</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Vide Malaxeur:</span>
+                    <span className="text-gray-900">0</span>
                   </div>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
@@ -28,6 +28,12 @@ export default function Layout({ children }: LayoutProps) {
   const { user, logout, hasAccess } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [productionMenuOpen, setProductionMenuOpen] = useState(false);
+  const [now, setNow] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const navItems: Array<{ path: string; label: string; icon: any; roles: UserRole[] }> = [
     { path: '/', label: 'Vue d\'ensemble', icon: LayoutDashboard, roles: ['Admin'] },
@@ -126,8 +132,12 @@ export default function Layout({ children }: LayoutProps) {
               )}
             </div>
 
-            {/* User info and logout */}
+            {/* User info, date/heure et logout */}
             <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="hidden md:flex flex-col items-end text-xs text-gray-500 mr-2">
+                <span>{now.toLocaleDateString('fr-FR')}</span>
+                <span>{now.toLocaleTimeString('fr-FR')}</span>
+              </div>
               <div className="hidden sm:flex items-center space-x-2 text-xs sm:text-sm text-gray-600">
                 <User className="w-4 h-4 flex-shrink-0" />
                 <span className="hidden md:inline whitespace-nowrap">{user?.username}</span>
