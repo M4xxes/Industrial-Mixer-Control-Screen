@@ -382,12 +382,16 @@ export default function ProductionPage() {
   };
 
   const handleDefaut = (mixerId: number) => {
-    alert(`Afficher les défauts du malaxeur ${mixerId}`);
+    const mixer = mixers.find(m => m.id === mixerId);
+    const label = mixer?.name || `B${mixerId}`;
+    alert(`Afficher les défauts du ${label}`);
     // TODO: Implémenter l'affichage des défauts
   };
 
   const handleAcquitDefauts = async (mixerId: number) => {
-    if (!confirm(`Êtes-vous sûr de vouloir acquitter tous les défauts du malaxeur ${mixerId} ?`)) return;
+    const mixer = mixers.find(m => m.id === mixerId);
+    const label = mixer?.name || `B${mixerId}`;
+    if (!confirm(`Êtes-vous sûr de vouloir acquitter tous les défauts du ${label} ?`)) return;
     
     try {
       // Acquitter toutes les alarmes actives pour ce malaxeur
@@ -403,7 +407,9 @@ export default function ProductionPage() {
   };
 
   const handleAppelOperateur = (mixerId: number) => {
-    alert(`Appel opérateur pour le malaxeur ${mixerId}`);
+    const mixer = mixers.find(m => m.id === mixerId);
+    const label = mixer?.name || `B${mixerId}`;
+    alert(`Appel opérateur pour le ${label}`);
     // TODO: Implémenter l'appel opérateur
   };
 
