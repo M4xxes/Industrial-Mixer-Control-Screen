@@ -8,6 +8,7 @@ interface User {
   id: string;
   username: string;
   role: 'Admin' | 'Operator' | 'Viewer';
+  mixerGroup?: 'B1-2' | 'B3-5' | 'B6-7' | null;
   createdAt?: string;
   lastLogin?: string;
 }
@@ -22,10 +23,12 @@ export default function MaintenancePage() {
     username: string;
     password: string;
     role: 'Admin' | 'Operator' | 'Viewer';
+    mixerGroup: 'B1-2' | 'B3-5' | 'B6-7' | '';
   }>({
     username: '',
     password: '',
     role: 'Operator',
+    mixerGroup: '',
   });
   const [passwordChangeUserId, setPasswordChangeUserId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -63,13 +66,16 @@ export default function MaintenancePage() {
         try {
           const usersData = await usersAPI.getAll();
           // Transformer les données si nécessaire
-          const transformedUsers = Array.isArray(usersData) ? usersData.map((u: any) => ({
-            id: u.id || u.user_id,
-            username: u.username || u.user_name,
-            role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
-            createdAt: u.createdAt || u.created_at,
-            lastLogin: u.lastLogin || u.last_login,
-          })) : [];
+          const transformedUsers = Array.isArray(usersData)
+            ? usersData.map((u: any) => ({
+                id: u.id || u.user_id,
+                username: u.username || u.user_name,
+                role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
+                mixerGroup: (u.mixerGroup || u.mixer_group || null) as User['mixerGroup'],
+                createdAt: u.createdAt || u.created_at,
+                lastLogin: u.lastLogin || u.last_login,
+              }))
+            : [];
           setUsers(transformedUsers);
         } catch (error) {
           console.error('Error fetching users:', error);
@@ -111,6 +117,7 @@ export default function MaintenancePage() {
         username: user.username,
         password: '',
         role: user.role,
+        mixerGroup: user.mixerGroup || '',
       });
     } else {
       setEditingUser(null);
@@ -118,6 +125,7 @@ export default function MaintenancePage() {
         username: '',
         password: '',
         role: 'Operator',
+        mixerGroup: '',
       });
     }
     setIsUserDialogOpen(true);
@@ -130,6 +138,7 @@ export default function MaintenancePage() {
       username: '',
       password: '',
       role: 'Operator',
+      mixerGroup: '',
     });
   };
 
@@ -148,18 +157,31 @@ export default function MaintenancePage() {
       }
     }
 
+    // Validation du groupe pour les opérateurs
+    if (userFormData.role === 'Operator' && !userFormData.mixerGroup) {
+      alert('Veuillez sélectionner le groupe de malaxeurs autorisé pour cet opérateur.');
+      return;
+    }
+
     try {
+      const mixerGroupPayload =
+        userFormData.role === 'Operator' ? userFormData.mixerGroup || null : null;
+
       if (editingUser) {
         await usersAPI.update(editingUser.id, {
           username: userFormData.username.trim(),
           role: userFormData.role,
+          mixerGroup: mixerGroupPayload,
         });
         alert('Utilisateur modifié avec succès');
       } else {
         await usersAPI.create({
           username: userFormData.username.trim(),
           password: userFormData.password,
+          // Email technique pour satisfaire la contrainte NOT NULL / UNIQUE
+          email: `${userFormData.username.trim()}@local`,
           role: userFormData.role,
+          mixerGroup: mixerGroupPayload,
         });
         alert('Utilisateur créé avec succès');
       }
@@ -167,7 +189,17 @@ export default function MaintenancePage() {
       // Recharger la liste des utilisateurs
       try {
         const usersData = await usersAPI.getAll();
-        setUsers(usersData);
+        const transformedUsers = Array.isArray(usersData)
+          ? usersData.map((u: any) => ({
+              id: u.id || u.user_id,
+              username: u.username || u.user_name,
+              role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
+              mixerGroup: (u.mixerGroup || u.mixer_group || null) as User['mixerGroup'],
+              createdAt: u.createdAt || u.created_at,
+              lastLogin: u.lastLogin || u.last_login,
+            }))
+          : [];
+        setUsers(transformedUsers);
       } catch (fetchError) {
         console.error('Error fetching users after save:', fetchError);
       }
@@ -190,13 +222,16 @@ export default function MaintenancePage() {
         // Recharger la liste des utilisateurs
         try {
           const usersData = await usersAPI.getAll();
-          const transformedUsers = Array.isArray(usersData) ? usersData.map((u: any) => ({
-            id: u.id || u.user_id,
-            username: u.username || u.user_name,
-            role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
-            createdAt: u.createdAt || u.created_at,
-            lastLogin: u.lastLogin || u.last_login,
-          })) : [];
+          const transformedUsers = Array.isArray(usersData)
+            ? usersData.map((u: any) => ({
+                id: u.id || u.user_id,
+                username: u.username || u.user_name,
+                role: (u.role || 'Operator') as 'Admin' | 'Operator' | 'Viewer',
+                mixerGroup: (u.mixerGroup || u.mixer_group || null) as User['mixerGroup'],
+                createdAt: u.createdAt || u.created_at,
+                lastLogin: u.lastLogin || u.last_login,
+              }))
+            : [];
           setUsers(transformedUsers);
         } catch (fetchError) {
           console.error('Error fetching users after delete:', fetchError);
@@ -571,6 +606,7 @@ export default function MaintenancePage() {
                 <th className="border p-3 text-left">Nom d'utilisateur</th>
                 <th className="border p-3 text-left">Mot de passe</th>
                 <th className="border p-3 text-left">Rôle</th>
+                <th className="border p-3 text-left">Groupe malaxeurs</th>
                 <th className="border p-3 text-left">Dernière connexion</th>
                 <th className="border p-3 text-left">Actions</th>
               </tr>
@@ -596,6 +632,20 @@ export default function MaintenancePage() {
                         {user.role}
                       </span>
                     </td>
+                    <td className="border p-3 text-sm text-gray-600">
+                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString('fr-FR') : 'Jamais'}
+                    </td>
+                  <td className="border p-3">
+                    {user.role === 'Operator'
+                      ? (user.mixerGroup === 'B1-2'
+                          ? 'B1/B2'
+                          : user.mixerGroup === 'B3-5'
+                          ? 'B3/B5'
+                          : user.mixerGroup === 'B6-7'
+                          ? 'B6/B7'
+                          : '-')
+                      : '-'}
+                  </td>
                     <td className="border p-3 text-sm text-gray-600">
                       {user.lastLogin ? new Date(user.lastLogin).toLocaleString('fr-FR') : 'Jamais'}
                     </td>
@@ -866,6 +916,28 @@ export default function MaintenancePage() {
                   <option value="Viewer">Viewer</option>
                 </select>
               </div>
+              {userFormData.role === 'Operator' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Groupe de malaxeurs autorisé *
+                  </label>
+                  <select
+                    value={userFormData.mixerGroup}
+                    onChange={(e) =>
+                      setUserFormData({
+                        ...userFormData,
+                        mixerGroup: e.target.value as 'B1-2' | 'B3-5' | 'B6-7' | '',
+                      })
+                    }
+                    className="w-full border rounded-md px-3 py-2"
+                  >
+                    <option value="">Sélectionner un groupe</option>
+                    <option value="B1-2">B1/B2</option>
+                    <option value="B3-5">B3/B5</option>
+                    <option value="B6-7">B6/B7</option>
+                  </select>
+                </div>
+              )}
               <div className="flex justify-end gap-4 pt-4 border-t">
                 <button onClick={closeUserDialog} className="btn-secondary">
                   Annuler

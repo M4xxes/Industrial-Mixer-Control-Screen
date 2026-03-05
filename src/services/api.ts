@@ -220,20 +220,34 @@ export const automateAPI = {
 export const usersAPI = {
   getAll: () => fetchAPI('/users'),
   getById: (id: string) => fetchAPI(`/users/${id}`),
-  create: (data: { username: string; email: string; password: string; role: string }) => fetchAPI('/users', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }),
-  update: (id: string, data: any) => fetchAPI(`/users/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  }),
-  delete: (id: string) => fetchAPI(`/users/${id}`, {
-    method: 'DELETE',
-  }),
-  changePassword: (id: string, password: string) => fetchAPI(`/users/${id}/password`, {
-    method: 'PUT',
-    body: JSON.stringify({ password }),
-  }),
+  create: (data: { username: string; email: string; password: string; role: string; mixerGroup?: string | null }) =>
+    fetchAPI('/users', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  update: (id: string, data: any) =>
+    fetchAPI(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) =>
+    fetchAPI(`/users/${id}`, {
+      method: 'DELETE',
+    }),
+  changePassword: (id: string, password: string) =>
+    fetchAPI(`/users/${id}/password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password }),
+    }),
+};
+
+// ========== AUTH API ==========
+
+export const authAPI = {
+  login: (username: string, password: string) =>
+    fetchAPI('/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
 };
 

@@ -5,7 +5,8 @@ export type AlarmLevel = 'Info' | 'Warning' | 'Critique';
 export type AlarmStatus = 'Active' | 'Acquittée';
 export type BatchStatus = 'En cours' | 'Terminé' | 'Interrompu' | 'Erreur' | 'Succès' | 'Alerte';
 export type InventoryStatus = 'Normal' | 'Bas' | 'Critique';
-export type UserRole = 'Admin' | 'B1/2' | 'B3/5' | 'B6/7' | 'Operator' | 'Viewer';
+export type UserRole = 'Admin' | 'Operator' | 'Viewer';
+export type MixerGroup = 'B1-2' | 'B3-5' | 'B6-7';
 export type ExecutionStatus = 'EN_COURS' | 'TERMINE' | 'ERREUR' | 'INTERROMPU';
 export type RecipeFunction = 
   | 'Démarrage' 

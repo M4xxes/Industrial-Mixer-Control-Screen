@@ -19,10 +19,21 @@ async function initDatabase() {
         email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('Admin', 'Operator', 'Viewer')),
+        mixer_group TEXT, -- Groupe de malaxeurs autorisé pour les opérateurs (ex: 'B1-2', 'B3-5', 'B6-7')
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_login DATETIME
       )
     `);
+
+    // Migration légère : ajouter la colonne mixer_group si la table existe déjà sans cette colonne
+    try {
+      await run(`ALTER TABLE users ADD COLUMN mixer_group TEXT`);
+    } catch (error) {
+      // Ignorer l'erreur "duplicate column name" si la colonne existe déjà
+      if (!String(error.message).includes('duplicate column name')) {
+        throw error;
+      }
+    }
 
     // Table mixers (pour les informations en temps réel des malaxeurs)
     await run(`

@@ -1,9 +1,9 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { UserRole } from '../types';
+import { createContext, useContext, useState, ReactNode } from 'react';
+import { UserRole, MixerGroup } from '../types';
 
 interface AuthContextType {
-  user: { username: string; role: UserRole } | null;
-  login: (username: string, role: UserRole) => void;
+  user: { id: string; username: string; role: UserRole; mixerGroup?: MixerGroup | null } | null;
+  login: (user: { id: string; username: string; role: UserRole; mixerGroup?: MixerGroup | null }) => void;
   logout: () => void;
   isAdmin: () => boolean;
   hasAccess: (requiredRole: UserRole | UserRole[]) => boolean;
@@ -12,25 +12,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<{ username: string; role: UserRole } | null>(() => {
+  const [user, setUser] = useState<{ id: string; username: string; role: UserRole; mixerGroup?: MixerGroup | null } | null>(() => {
     // Charger depuis localStorage au démarrage
     const saved = localStorage.getItem('auth');
     return saved ? JSON.parse(saved) : null;
   });
 
-  useEffect(() => {
-    // Si pas d'utilisateur, demander connexion
-    if (!user) {
-      const username = prompt('Entrez votre nom d\'utilisateur:') || 'User';
-      const role = prompt('Entrez votre rôle (Admin, B1/2, B3/5, B6/7, Operator, Viewer):') as UserRole || 'Viewer';
-      const userData = { username, role };
-      setUser(userData);
-      localStorage.setItem('auth', JSON.stringify(userData));
-    }
-  }, [user]);
-
-  const login = (username: string, role: UserRole) => {
-    const userData = { username, role };
+  const login = (authUser: { id: string; username: string; role: UserRole; mixerGroup?: MixerGroup | null }) => {
+    const userData = authUser;
     setUser(userData);
     localStorage.setItem('auth', JSON.stringify(userData));
   };
@@ -38,10 +27,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('auth');
-    // Redemander connexion
-    const username = prompt('Entrez votre nom d\'utilisateur:') || 'User';
-    const role = prompt('Entrez votre rôle (Admin, B1/2, B3/5, B6/7, Operator, Viewer):') as UserRole || 'Viewer';
-    login(username, role);
   };
 
   const isAdmin = () => user?.role === 'Admin';

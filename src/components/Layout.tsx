@@ -2,7 +2,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { UserRole } from '../types';
+import { UserRole, MixerGroup } from '../types';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Scale
 } from 'lucide-react';
+import LoginOverlay from './LoginOverlay';
 
 interface LayoutProps {
   children: ReactNode;
@@ -35,24 +36,37 @@ export default function Layout({ children }: LayoutProps) {
     return () => clearInterval(id);
   }, []);
 
+  // Si aucun utilisateur connecté, afficher l'écran de connexion plein écran
+  if (!user) {
+    return <LoginOverlay />;
+  }
+
   const navItems: Array<{ path: string; label: string; icon: any; roles: UserRole[] }> = [
     { path: '/', label: 'Vue d\'ensemble', icon: LayoutDashboard, roles: ['Admin'] },
     { path: '/recipes', label: 'Recettes', icon: BookOpen, roles: ['Admin'] },
     { path: '/balance-manuel', label: 'Balance manuel', icon: Scale, roles: ['Admin'] },
-    // { path: '/inventory', label: 'Stocks', icon: Package, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] }, // Masqué temporairement
-    { path: '/alarms', label: 'Alarmes', icon: AlertTriangle, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
-    { path: '/history', label: 'Historique', icon: History, roles: ['Admin', 'B1/2', 'B3/5', 'B6/7', 'Operator', 'Viewer'] },
+    // { path: '/inventory', label: 'Stocks', icon: Package, roles: ['Admin', 'Operator', 'Viewer'] }, // Masqué temporairement
+    { path: '/alarms', label: 'Alarmes', icon: AlertTriangle, roles: ['Admin', 'Operator'] },
+    { path: '/history', label: 'Historique', icon: History, roles: ['Admin', 'Operator'] },
     { path: '/maintenance', label: 'Maintenance', icon: Settings, roles: ['Admin'] },
   ];
 
-  const productionItems: Array<{ path: string; label: string; roles: UserRole[] }> = [
-    { path: '/production/B1-2', label: 'Production BUTYL1/2', roles: ['Admin', 'B1/2'] },
-    { path: '/production/B3-5', label: 'Production BUTYL3/5', roles: ['Admin', 'B3/5'] },
-    { path: '/production/B6-7', label: 'Production BUTYL6/7', roles: ['Admin', 'B6/7'] },
+  const productionItems: Array<{ path: string; label: string; group: MixerGroup }> = [
+    { path: '/production/B1-2', label: 'Production BUTYL1/2', group: 'B1-2' },
+    { path: '/production/B3-5', label: 'Production BUTYL3/5', group: 'B3-5' },
+    { path: '/production/B6-7', label: 'Production BUTYL6/7', group: 'B6-7' },
   ];
 
   const visibleNavItems = navItems.filter(item => hasAccess(item.roles));
-  const visibleProductionItems = productionItems.filter(item => hasAccess(item.roles));
+  const visibleProductionItems = productionItems.filter(item => {
+    // Admin : accès à tous les groupes
+    if (user.role === 'Admin') return true;
+    // Opérateur : uniquement au groupe autorisé
+    if (user.role === 'Operator') {
+      return user.mixerGroup === item.group;
+    }
+    return false;
+  });
   const hasProductionAccess = visibleProductionItems.length > 0;
   const isProductionActive = location.pathname.startsWith('/production/');
 

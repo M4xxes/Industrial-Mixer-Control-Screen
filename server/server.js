@@ -47,6 +47,47 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+// S'assurer que la table users possède bien la colonne mixer_group (migration légère)
+async function ensureUsersTableHasMixerGroup() {
+  try {
+    await run(`ALTER TABLE users ADD COLUMN mixer_group TEXT`);
+    console.log('✅ Colonne mixer_group ajoutée à la table users');
+  } catch (error) {
+    const msg = String(error?.message || error);
+    if (!msg.includes('duplicate column name')) {
+      console.error('Erreur lors de l\'ajout de la colonne mixer_group à users:', error);
+    }
+  }
+}
+
+// Créer un administrateur par défaut si aucun utilisateur n'existe
+async function ensureDefaultAdmin() {
+  try {
+    const row = await get('SELECT COUNT(*) as count FROM users');
+    if (row && row.count === 0) {
+      const adminId = uuidv4();
+      const passwordHash = await hashPassword('admin');
+      await run(
+        `
+        INSERT INTO users (id, username, email, password_hash, role, created_at)
+        VALUES (?, ?, ?, ?, 'Admin', CURRENT_TIMESTAMP)
+      `,
+        [adminId, 'admin', 'admin@local', passwordHash]
+      );
+      console.log('👤 Utilisateur administrateur par défaut créé: admin / admin');
+    }
+  } catch (error) {
+    console.error('Erreur lors de la vérification/création de l\'admin par défaut:', error);
+  }
+}
+
+// Lancer la petite migration puis vérifier/créer l'admin par défaut
+ensureUsersTableHasMixerGroup()
+  .then(() => ensureDefaultAdmin())
+  .catch((error) => {
+    console.error('Erreur lors de l\'initialisation des utilisateurs:', error);
+  });
+
 // Helper: envoyer une variable vers Node-RED / automate
 async function postAutomateVariable(variable, value, utilisateur = 'supervision_web') {
   const url = 'http://localhost:1880/api/variable';
@@ -84,6 +125,7 @@ app.get('/', (req, res) => {
         ingredients: '/api/ingredients',
         manualWeights: '/api/manual-weights',
         automateVariable: '/api/variable',
+        login: '/api/login',
       },
   });
 });
@@ -102,6 +144,50 @@ app.post('/api/variable', async (req, res) => {
   } catch (error) {
     console.error('Erreur lors de l\'appel automate:', error);
     res.status(502).json({ error: 'Erreur lors de l\'écriture de la variable automate', message: error.message });
+  }
+});
+
+// ========== AUTH / LOGIN ==========
+
+// POST /api/login - Authentifier un utilisateur (username + password)
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Nom d\'utilisateur et mot de passe requis' });
+    }
+
+    const user = await get(
+      'SELECT id, username, email, role, password_hash, mixer_group, created_at, last_login FROM users WHERE username = ?',
+      [username]
+    );
+
+    if (!user) {
+      return res.status(401).json({ error: 'Identifiants invalides' });
+    }
+
+    const passwordOk = await comparePassword(password, user.password_hash);
+    if (!passwordOk) {
+      return res.status(401).json({ error: 'Identifiants invalides' });
+    }
+
+    // Mettre à jour la date de dernière connexion
+    await run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+
+    const safeUser = {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      mixer_group: user.mixer_group,
+      created_at: user.created_at,
+      last_login: new Date().toISOString(),
+    };
+
+    res.json(safeUser);
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({ error: 'Erreur lors de la connexion' });
   }
 });
 
@@ -637,7 +723,7 @@ app.post('/api/mixers/:id/validate-step', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const users = await all(`
-      SELECT id, username, email, role, created_at, last_login
+      SELECT id, username, email, role, mixer_group, created_at, last_login
       FROM users
       ORDER BY created_at DESC
     `);
@@ -651,7 +737,7 @@ app.get('/api/users', async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const user = await get(`
-      SELECT id, username, email, role, created_at, last_login
+      SELECT id, username, email, role, mixer_group, created_at, last_login
       FROM users
       WHERE id = ?
     `, [req.params.id]);
@@ -669,7 +755,7 @@ app.get('/api/users/:id', async (req, res) => {
 // POST /api/users - Créer un utilisateur
 app.post('/api/users', async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, mixerGroup } = req.body;
     
     // Validation
     if (!username || !email || !password) {
@@ -692,13 +778,13 @@ app.post('/api/users', async (req, res) => {
     
     // Créer l'utilisateur
     await run(`
-      INSERT INTO users (id, username, email, password_hash, role, created_at)
-      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `, [userId, username, email, passwordHash, role || 'Operator']);
+      INSERT INTO users (id, username, email, password_hash, role, mixer_group, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [userId, username, email, passwordHash, role || 'Operator', mixerGroup || null]);
     
     // Retourner l'utilisateur créé (sans le mot de passe)
     const newUser = await get(`
-      SELECT id, username, email, role, created_at, last_login
+      SELECT id, username, email, role, mixer_group, created_at, last_login
       FROM users
       WHERE id = ?
     `, [userId]);
@@ -713,7 +799,7 @@ app.post('/api/users', async (req, res) => {
 // PUT /api/users/:id - Modifier un utilisateur
 app.put('/api/users/:id', async (req, res) => {
   try {
-    const { username, email, role } = req.body;
+    const { username, email, role, mixerGroup } = req.body;
     const userId = req.params.id;
     
     // Vérifier si l'utilisateur existe
@@ -749,6 +835,10 @@ app.put('/api/users/:id', async (req, res) => {
       updates.push('role = ?');
       params.push(role);
     }
+    if (typeof mixerGroup !== 'undefined') {
+      updates.push('mixer_group = ?');
+      params.push(mixerGroup || null);
+    }
     
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Aucune donnée à mettre à jour' });
@@ -763,7 +853,7 @@ app.put('/api/users/:id', async (req, res) => {
     
     // Retourner l'utilisateur mis à jour
     const updatedUser = await get(`
-      SELECT id, username, email, role, created_at, last_login
+      SELECT id, username, email, role, mixer_group, created_at, last_login
       FROM users
       WHERE id = ?
     `, [userId]);

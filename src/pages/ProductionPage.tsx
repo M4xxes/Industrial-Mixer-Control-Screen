@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useMixers } from '../hooks/useMixers';
 import { recipesAPI, mixersAPI, alarmsAPI, batchesAPI, etapesExecutionAPI, automateAPI } from '../services/api';
@@ -9,7 +9,7 @@ import MixerVisual from '../components/MixerVisual';
 
 export default function ProductionPage() {
   const { pair } = useParams<{ pair: string }>();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { mixers, loading: mixersLoading, error: mixersError } = useMixers();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [alarms, setAlarms] = useState<Alarm[]>([]);
@@ -41,6 +41,17 @@ export default function ProductionPage() {
   } | null>(null);
   const [poidsBascule, setPoidsBascule] = useState<Record<number, number>>({});
   const [batchNumberManual, setBatchNumberManual] = useState<Record<number, string>>({});
+
+  // Restriction d'accès pour les opérateurs : uniquement leur groupe de malaxeurs
+  if (!isAdmin() && user?.role === 'Operator') {
+    const allowedGroup = user.mixerGroup;
+    if (!allowedGroup) {
+      return <Navigate to="/alarms" replace />;
+    }
+    if (!pair || pair !== allowedGroup) {
+      return <Navigate to={`/production/${allowedGroup}`} replace />;
+    }
+  }
 
   // Helpers variables automate
   const getMixerCode = (mixerId: number): string => {
