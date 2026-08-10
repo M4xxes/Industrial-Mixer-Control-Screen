@@ -1,6 +1,7 @@
 import { Recipe, Mixer } from '../types';
 import { CheckCircle2, Clock, Circle } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { getStepStatus as getStepStatusPure, getStepProgress as getStepProgressPure, calculateTotalWeightDosed } from '../utils/recipeSteps';
 
 interface RecipeProgressProps {
   recipe: Recipe;
@@ -9,32 +10,22 @@ interface RecipeProgressProps {
 
 export default function RecipeProgress({ recipe, mixer }: RecipeProgressProps) {
   const currentStepIndex = (mixer.currentStep || 1) - 1;
-  const currentStep = recipe.steps[currentStepIndex];
   
   // Calcul des totaux
   const totalSteps = recipe.steps.length;
   const completedSteps = currentStepIndex;
   const totalWeightToDose = recipe.steps.reduce((sum, step) => sum + (step.weight || 0), 0);
-  const totalWeightDosed = recipe.steps
-    .slice(0, currentStepIndex)
-    .reduce((sum, step) => sum + (step.weight || 0), 0);
-  const currentStepWeightDosed = mixer.batchProgress 
-    ? (currentStep?.weight || 0) * (mixer.batchProgress / 100)
-    : 0;
-  const totalWeightDosedWithCurrent = totalWeightDosed + currentStepWeightDosed;
+  const totalWeightDosedWithCurrent = calculateTotalWeightDosed(
+    recipe.steps,
+    currentStepIndex,
+    mixer.batchProgress
+  );
   const remainingWeight = totalWeightToDose - totalWeightDosedWithCurrent;
 
-  const getStepStatus = (stepIndex: number) => {
-    if (stepIndex < currentStepIndex) return 'completed';
-    if (stepIndex === currentStepIndex) return 'current';
-    return 'pending';
-  };
+  const getStepStatus = (stepIndex: number) => getStepStatusPure(stepIndex, currentStepIndex);
 
-  const getStepProgress = (stepIndex: number) => {
-    if (stepIndex < currentStepIndex) return 100;
-    if (stepIndex === currentStepIndex) return mixer.batchProgress || 0;
-    return 0;
-  };
+  const getStepProgress = (stepIndex: number) =>
+    getStepProgressPure(stepIndex, currentStepIndex, mixer.batchProgress);
 
   return (
     <div className="space-y-6">

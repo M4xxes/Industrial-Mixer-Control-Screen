@@ -3,6 +3,7 @@ import { alarmsAPI } from '../services/api';
 import { Alarm, AlarmLevel, AlarmStatus } from '../types';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { filterAlarms, acknowledgeAlarm, acknowledgeAllActive } from '../utils/alarmLogic';
 
 export default function AlarmsPage() {
   const [alarms, setAlarms] = useState<Alarm[]>([]);
@@ -50,11 +51,7 @@ export default function AlarmsPage() {
     try {
       await alarmsAPI.acknowledge(alarmId);
       // Mettre à jour l'alarme localement
-      setAlarms(alarms.map(a =>
-        a.id === alarmId
-          ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
-          : a
-      ));
+      setAlarms(alarms.map(a => (a.id === alarmId ? acknowledgeAlarm(a) : a)));
     } catch (error) {
       console.error('Error acknowledging alarm:', error);
       alert('Erreur lors de l\'acquittement de l\'alarme');
@@ -67,46 +64,16 @@ export default function AlarmsPage() {
     try {
       const activeAlarmsToAcknowledge = alarms.filter(a => a.status === 'Active');
       await Promise.all(activeAlarmsToAcknowledge.map(a => alarmsAPI.acknowledge(a.id)));
-      
+
       // Mettre à jour toutes les alarmes localement
-      setAlarms(alarms.map(a =>
-        a.status === 'Active'
-          ? { ...a, status: 'Acquittée' as AlarmStatus, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' }
-          : a
-      ));
+      setAlarms(acknowledgeAllActive(alarms));
     } catch (error) {
       console.error('Error acknowledging all alarms:', error);
       alert('Erreur lors de l\'acquittement des alarmes');
     }
   };
 
-  const filteredAlarms = alarms.filter(alarm => {
-    if (filters.mixer !== 'all' && alarm.mixerId !== parseInt(filters.mixer)) return false;
-    if (filters.level !== 'all' && alarm.level !== filters.level) return false;
-    if (filters.status !== 'all' && alarm.status !== filters.status) return false;
-    // Filtre par période (si implémenté)
-    if (filters.period) {
-      const alarmDate = new Date(alarm.occurredAt);
-      const now = new Date();
-      const periodDays = parseInt(filters.period);
-      const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
-      if (alarmDate < periodStart) return false;
-    }
-    // Filtre par date (comme dans historique)
-    if (filters.dateFrom) {
-      const alarmDate = new Date(alarm.occurredAt);
-      const fromDate = new Date(filters.dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      if (alarmDate < fromDate) return false;
-    }
-    if (filters.dateTo) {
-      const alarmDate = new Date(alarm.occurredAt);
-      const toDate = new Date(filters.dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      if (alarmDate > toDate) return false;
-    }
-    return true;
-  });
+  const filteredAlarms = filterAlarms(alarms, filters);
 
   const getLevelIcon = (level: AlarmLevel) => {
     switch (level) {
