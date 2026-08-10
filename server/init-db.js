@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
 
-const db = new sqlite3.Database('./database.sqlite');
+const db = new sqlite3.Database(process.env.SQLITE_DB_PATH || './database.sqlite');
 
 const run = promisify(db.run.bind(db));
 const all = promisify(db.all.bind(db));
@@ -272,6 +272,17 @@ async function initDatabase() {
     `);
     await run(`CREATE INDEX IF NOT EXISTS idx_manual_weights_product ON manual_weights(product_name)`);
     await run(`CREATE INDEX IF NOT EXISTS idx_manual_weights_created ON manual_weights(created_at)`);
+
+    // Trigger : validation des bornes de poids avant insertion (0 < poids <= 1000 Kg)
+    // Empêche la corruption de la base par une saisie manuelle aberrante (ex: poids négatif ou virgule décalée).
+    await run(`
+      CREATE TRIGGER IF NOT EXISTS trg_manual_weights_bounds
+      BEFORE INSERT ON manual_weights
+      WHEN NEW.weight_kg <= 0 OR NEW.weight_kg > 1000
+      BEGIN
+        SELECT RAISE(ABORT, 'weight_kg hors bornes autorisées (0 < poids <= 1000 Kg)');
+      END
+    `);
 
     console.log('Tables créées avec succès');
 

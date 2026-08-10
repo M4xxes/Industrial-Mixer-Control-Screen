@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 coverage
+lighthouse-reports
 
 # Editor directories and files
 .vscode/*
