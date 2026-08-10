@@ -44,4 +44,28 @@ describe('alarmLogic — filtrage multi-critères des alarmes', () => {
     });
     expect(result.map((a) => a.id).sort()).toEqual(['1', '2']);
   });
+
+  it('applique une fenêtre glissante en jours (period)', () => {
+    // baseAlarms[2] date du 2026-07-01, hors fenêtre de 7 jours par rapport à "maintenant"
+    const result = filterAlarms(baseAlarms, {
+      mixer: 'all',
+      level: 'all',
+      status: 'all',
+      period: '7',
+    });
+    expect(result.map((a) => a.id)).not.toContain('3');
+  });
+});
+
+describe('alarmLogic — horodatage par défaut (sans callback now explicite)', () => {
+  it('acknowledgeAlarm utilise Date.toISOString() par défaut quand aucun now n\'est fourni', () => {
+    const acked = acknowledgeAlarm(baseAlarms[0], 'operateur1');
+    expect(acked.acknowledgedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it('acknowledgeAllActive utilise Date.toISOString() par défaut quand aucun now n\'est fourni', () => {
+    const result = acknowledgeAllActive(baseAlarms, 'admin');
+    const acked = result.find((a) => a.id === '1');
+    expect(acked?.acknowledgedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
 });
